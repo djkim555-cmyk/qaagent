@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>맑은 노티 관리자 · 스타일 가이드</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"DM Sans"','"Pretendard Variable"','Pretendard','ui-sans-serif','system-ui','sans-serif'],
+          mono: ['"DM Mono"','ui-monospace','monospace'],
+        },
+        colors: {
+          primary: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#8ec5ff',400:'#51a2ff',500:'#2b7fff',600:'#155dfc',700:'#1447e6',800:'#1e40af',900:'#1e3a8a', DEFAULT:'#2b7fff' },
+        },
+      },
+    },
+  };
+</script>
+<style type="text/tailwindcss">
+  @layer base {
+    html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+    body { font-family:"DM Sans","Pretendard Variable",Pretendard,system-ui,sans-serif; letter-spacing:-0.01em; @apply bg-slate-50 text-slate-900; -webkit-font-smoothing:antialiased; }
+    [data-lucide]{ width:1em; height:1em; }
+  }
+  .swatch { @apply h-16 rounded-md ring-1 ring-inset ring-black/5; }
+  .mono { font-family:"DM Mono",monospace; }
+  .navlink { @apply block px-3 py-1.5 rounded-md text-[13px] text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors; }
+  .navlink.head { @apply mt-4 mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:bg-transparent hover:text-slate-400; }
+  .card { @apply bg-white rounded-lg ring-1 ring-slate-200; }
+  .sechead { @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-600 mb-2; }
+  .h2 { @apply text-2xl font-bold tracking-tight text-slate-900; }
+  .h3 { @apply text-[15px] font-semibold text-slate-900; }
+  .lead { @apply text-sm text-slate-500 leading-relaxed; }
+  .scroll-thin::-webkit-scrollbar{width:8px;height:8px}
+  .scroll-thin::-webkit-scrollbar-thumb{background:rgb(226 232 240);border-radius:999px}
+</style>
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="font-sans">
+
+<div class="flex max-w-[1500px] mx-auto">
+
+  <!-- Side nav -->
+  <aside class="hidden lg:flex flex-col w-64 shrink-0 h-screen sticky top-0 border-r border-slate-200 bg-white/70 backdrop-blur px-4 py-6">
+    <div class="flex items-center gap-2.5 px-3 mb-1">
+      <span class="inline-flex items-center justify-center size-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-sm shadow-primary-500/30">
+        <i data-lucide="message-square-dot" style="width:18px;height:18px"></i>
+      </span>
+      <div class="leading-tight">
+        <div class="text-[14px] font-bold text-slate-900">맑은 노티</div>
+        <div class="text-[11px] text-slate-400">스타일 가이드 v1.0</div>
+      </div>
+    </div>
+    <nav class="flex-1 overflow-auto scroll-thin mt-3 -mx-1 px-1">
+      <span class="navlink head">시작</span>
+      <a class="navlink" href="#overview">개요</a>
+      <a class="navlink" href="#principles">디자인 원칙</a>
+      <span class="navlink head">파운데이션</span>
+      <a class="navlink" href="#color">색상</a>
+      <a class="navlink" href="#typography">타이포그래피</a>
+      <a class="navlink" href="#spacing">스페이싱</a>
+      <a class="navlink" href="#radius">반경 &amp; 보더</a>
+      <a class="navlink" href="#elevation">엘리베이션</a>
+      <a class="navlink" href="#icon">아이콘</a>
+      <span class="navlink head">컴포넌트</span>
+      <a class="navlink" href="#buttons">버튼</a>
+      <a class="navlink" href="#badges">배지 &amp; 상태</a>
+      <a class="navlink" href="#forms">폼 컨트롤</a>
+      <a class="navlink" href="#table">테이블</a>
+      <a class="navlink" href="#nav">탭 &amp; 내비게이션</a>
+      <a class="navlink" href="#cards">카드 &amp; 모달</a>
+      <span class="navlink head">활용</span>
+      <a class="navlink" href="#layout">레이아웃</a>
+      <a class="navlink" href="#dodont">Do &amp; Don't</a>
+    </nav>
+    <div class="px-3 pt-3 mt-2 border-t border-slate-100 text-[11px] text-slate-400">
+      DM Sans · Tailwind · Lucide
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="flex-1 min-w-0 px-6 md:px-12 py-12 space-y-20">
+
+    <!-- COVER -->
+    <header id="overview" class="scroll-mt-6">
+      <div class="inline-flex items-center gap-2 h-7 px-3 rounded-full bg-primary-50 ring-1 ring-inset ring-primary-200 text-primary-700 text-xs font-medium mb-6">
+        <span class="size-1.5 rounded-full bg-primary-500"></span>
+        Admin Design System
+      </div>
+      <h1 class="text-[44px] leading-[1.05] font-extrabold tracking-tight text-slate-900 max-w-2xl">맑은 노티 관리자<br/>스타일 가이드</h1>
+      <p class="mt-5 text-base text-slate-500 leading-relaxed max-w-2xl">
+        PUSH · RCS · SMS · 알림톡 통합 발송 콘솔의 시각 언어를 정의합니다.
+        조밀한 정보 밀도를 다루는 백오피스에 맞춰 <b class="text-slate-700">차분한 슬레이트 중립색</b>과
+        <b class="text-slate-700">선명한 블루 강조색</b>, <b class="text-slate-700">DM&nbsp;Sans</b> 타이포를 기반으로 합니다.
+      </p>
+      <div class="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl">
+        <div class="card p-4">
+          <div class="h-10 rounded-md bg-primary-500 mb-3"></div>
+          <div class="text-[13px] font-semibold text-slate-900">Primary</div>
+          <div class="text-[11px] text-slate-400 mono">#2B7FFF</div>
+        </div>
+        <div class="card p-4">
+          <div class="h-10 rounded-md bg-slate-900 mb-3"></div>
+          <div class="text-[13px] font-semibold text-slate-900">Ink</div>
+          <div class="text-[11px] text-slate-400 mono">#0F172B</div>
+        </div>
+        <div class="card p-4">
+          <div class="h-10 rounded-md bg-white ring-1 ring-slate-200 mb-3 flex items-center justify-center text-[20px] font-bold text-slate-900" style="font-family:'DM Sans'">Aa</div>
+          <div class="text-[13px] font-semibold text-slate-900">DM Sans</div>
+          <div class="text-[11px] text-slate-400">+ Pretendard</div>
+        </div>
+        <div class="card p-4">
+          <div class="h-10 rounded-md bg-slate-50 ring-1 ring-slate-200 mb-3 flex items-center justify-center text-slate-400">
+            <i data-lucide="shapes" style="width:20px;height:20px"></i>
+          </div>
+          <div class="text-[13px] font-semibold text-slate-900">radius 6</div>
+          <div class="text-[11px] text-slate-400">기본 단위</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- PRINCIPLES -->
+    <section id="principles" class="scroll-mt-6">
+      <div class="sechead">Foundations</div>
+      <h2 class="h2">디자인 원칙</h2>
+      <div class="mt-6 grid md:grid-cols-3 gap-4">
+        <div class="card p-5">
+          <span class="inline-flex items-center justify-center size-9 rounded-lg bg-primary-50 text-primary-600 mb-3"><i data-lucide="layout-grid" style="width:18px;height:18px"></i></span>
+          <h3 class="h3">밀도 우선</h3>
+          <p class="lead mt-1.5">관리자는 한 화면에서 많은 정보를 처리합니다. 여백은 절제하되 위계는 분명하게. 28~36px 컨트롤 높이를 기준으로 합니다.</p>
+        </div>
+        <div class="card p-5">
+          <span class="inline-flex items-center justify-center size-9 rounded-lg bg-emerald-50 text-emerald-600 mb-3"><i data-lucide="contrast" style="width:18px;height:18px"></i></span>
+          <h3 class="h3">차분한 중립</h3>
+          <p class="lead mt-1.5">표면은 흰색과 슬레이트 50/100, 구획은 1px 슬레이트 보더(ring). 색은 의미가 있을 때만 — 강조·상태·채널에 한정합니다.</p>
+        </div>
+        <div class="card p-5">
+          <span class="inline-flex items-center justify-center size-9 rounded-lg bg-indigo-50 text-indigo-600 mb-3"><i data-lucide="git-compare-arrows" style="width:18px;height:18px"></i></span>
+          <h3 class="h3">일관된 토큰</h3>
+          <p class="lead mt-1.5">4px 스페이싱 그리드, 4/6/8 반경, 정해진 타입 스케일. 임의값을 만들지 않고 토큰 안에서 조합합니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLOR -->
+    <section id="color" class="scroll-mt-6">
+      <div class="sechead">Foundations</div>
+      <h2 class="h2">색상</h2>
+      <p class="lead mt-2 max-w-2xl">Primary는 액션·링크·선택 상태에, Slate는 표면·텍스트·보더에 사용합니다. 상태색과 채널 강조색은 의미 전달이 필요한 곳에만 제한적으로 씁니다.</p>
+
+      <h3 class="h3 mt-8 mb-3">Primary · Blue</h3>
+      <div id="ramp-primary" class="grid grid-cols-4 sm:grid-cols-7 gap-2"></div>
+
+      <h3 class="h3 mt-8 mb-3">Neutral · Slate</h3>
+      <div id="ramp-slate" class="grid grid-cols-3 sm:grid-cols-9 gap-2"></div>
+      <p class="text-[12px] text-slate-400 mt-2">텍스트: 900 제목 · 700 본문 · 500 보조 · 400 dimmed &nbsp;|&nbsp; 표면: white · 50 무드 · 100 호버 &nbsp;|&nbsp; 보더: 200 기본 · 300 입력</p>
+
+      <h3 class="h3 mt-8 mb-3">상태 · Status</h3>
+      <div id="ramp-status" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+
+      <h3 class="h3 mt-8 mb-3">채널 강조 · Accent</h3>
+      <div id="ramp-accent" class="grid grid-cols-3 gap-3"></div>
+
+      <details class="mt-8 group">
+        <summary class="cursor-pointer text-[13px] text-slate-500 hover:text-slate-700 inline-flex items-center gap-1.5 select-none">
+          <i data-lucide="chevron-right" class="transition-transform group-open:rotate-90" style="width:14px;height:14px"></i>
+          레거시 브랜드 색 (Front) — 참고용
+        </summary>
+        <div id="ramp-legacy" class="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-3"></div>
+        <p class="text-[12px] text-slate-400 mt-2">구 프론트 화면의 브랜드 팔레트입니다. 신규 관리자 화면에는 위의 Primary/Slate 체계를 사용하세요.</p>
+      </details>
+    </section>
+
+    <!-- TYPOGRAPHY -->
+    <section id="typography" class="scroll-mt-6">
+      <div class="sechead">Foundations</div>
+      <h2 class="h2">타이포그래피</h2>
+      <p class="lead mt-2 max-w-2xl">기본 서체는 <b class="text-slate-700">DM Sans</b>(라틴·숫자), 한글은 <b class="text-slate-700">Pretendard</b>로 폴백합니다. 전역 자간 -1%, 제목은 <span class="mono text-[12px]">tracking-tight</span>.</p>
+
+      <div class="card divide-y divide-slate-100 mt-6">
+        <div id="type-scale"></div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4 mt-6">
+        <div class="card p-5">
+          <h3 class="h3 mb-3">웨이트</h3>
+          <div class="space-y-1.5 text-slate-900">
+            <p style="font-weight:300">Light 300 · 맑은 노티 Aa 123</p>
+            <p style="font-weight:400">Regular 400 · 맑은 노티 Aa 123</p>
+            <p style="font-weight:500">Medium 500 · 맑은 노티 Aa 123</p>
+            <p style="font-weight:600">Semibold 600 · 맑은 노티 Aa 123</p>
+            <p style="font-weight:700">Bold 700 · 맑은 노티 Aa 123</p>
+            <p style="font-weight:800">Extrabold 800 · 맑은 노티 Aa 123</p>
+          </div>
+        </div>
+        <div class="card p-5">
+          <h3 class="h3 mb-3">숫자 · Tabular</h3>
+          <p class="text-[12px] text-slate-400 mb-2">테이블·통계의 수치는 <span class="mono">tabular-nums</span>로 정렬합니다.</p>
+          <div class="space-y-1 mono text-slate-900" style="font-variant-numeric:tabular-nums">
+            <div class="flex justify-between"><span class="text-slate-500">발송</span><span>1,243,118</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">실패율</span><span>0.42%</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">크레딧</span><span>₩9,450,000</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SPACING -->
+    <section id="spacing" class="scroll-mt-6">
+      <div class="sechead">Foundations</div>
+      <h2 class="h2">스페이싱</h2>
+      <p class="lead mt-2 max-w-2xl">모든 간격은 <b class="text-slate-700">4px 그리드</b>를 따릅니다. 카드 내부 20px(p-5), 페이지 패딩 24px(p-6), 컬럼 갭 20px가 기본값입니다.</p>
+      <div id="spacing-scale" class="card p-6 mt-6 space-y-2.5"></div>
+    </section>
+
+    <!-- RADIUS -->
+    <section id="radius" class="scroll-mt-6">
+      <div class="sechead">Foundations</div>
+      <h2 class="h2">반경 &amp; 보더</h2>
+      <div class="grid sm:grid-cols-2 gap-4 mt-6">
+        <div class="card p-6">
+          <h3 class="h3 mb-4">Radius</h3>
+          <div id="radius-scale" class="flex flex-wrap gap-5"></div>
+        </div>
+        <div class="card p-6">
+          <h3 class="h3 mb-4">보더 — ring 방식</h3>
+          <p class="lead mb-4">구획선은 <span class="mono text-[12px]">border</span> 대신 <span class="mono text-[12px]">ring-1 ring-inset</span>를 기본으로 씁니다. 레이아웃을 밀지 않아 정렬이 안정적입니다.</p>
+          <div class="space-y-2.5">
+            <div class="h-10 rounded-md bg-white ring-1 ring-slate-200 flex items-center px-3 text-[13px] text-slate-600">ring-slate-200 · 기본 표면·카드</div>
+            <div class="h-10 rounded-md bg-white ring-1 ring-slate-300 flex items-center px-3 text-[13px] text-slate-600">ring-slate-300 · 입력 필드</div>
+            <div class="h-10 rounded-md bg-white ring-2 ring-primary-500 flex items-center px-3 text-[13px] text-primary-700">ring-primary-500 · 포커스·선택</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ELEVATION -->
+    <section id="elevation" class="scroll-mt-6">
+      <div class="sechead">Foundations</div>
+      <h2 class="h2">엘리베이션</h2>
+      <p class="lead mt-2 max-w-2xl">표면은 평평하게 유지하고 그림자는 떠 있는 요소에만 부여합니다. 카드는 그림자 대신 ring으로 분리합니다.</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+        <div class="card p-5"><div class="h-14 rounded-md bg-white ring-1 ring-slate-200 mb-3"></div><div class="text-[13px] font-semibold">Flat (ring)</div><div class="text-[11px] text-slate-400 mono">ring-1</div><div class="text-[11px] text-slate-400">카드·패널</div></div>
+        <div class="card p-5"><div class="h-14 rounded-md bg-white shadow-sm ring-1 ring-slate-200/60 mb-3"></div><div class="text-[13px] font-semibold">Raised</div><div class="text-[11px] text-slate-400 mono">shadow-sm</div><div class="text-[11px] text-slate-400">호버·탭 active</div></div>
+        <div class="card p-5"><div class="h-14 rounded-md bg-white shadow-lg ring-1 ring-slate-200/40 mb-3"></div><div class="text-[13px] font-semibold">Overlay</div><div class="text-[11px] text-slate-400 mono">shadow-lg</div><div class="text-[11px] text-slate-400">드롭다운·팝오버</div></div>
+        <div class="card p-5"><div class="h-14 rounded-md bg-white shadow-2xl ring-1 ring-slate-200/40 mb-3"></div><div class="text-[13px] font-semibold">Modal</div><div class="text-[11px] text-slate-400 mono">shadow-2xl</div><div class="text-[11px] text-slate-400">다이얼로그</div></div>
+      </div>
+    </section>
+
+    <!-- ICON -->
+    <section id="icon" class="scroll-mt-6">
+      <div class="sechead">Foundations</div>
+      <h2 class="h2">아이콘</h2>
+      <p class="lead mt-2 max-w-2xl"><b class="text-slate-700">Lucide</b> 아이콘 세트, 선 굵기 <span class="mono text-[12px]">1.75</span>. 버튼 내 14·16px, 단독 액션 16px, KPI/메타 14px를 기준으로 합니다.</p>
+      <div class="card p-6 mt-6">
+        <div id="icon-grid" class="grid grid-cols-6 sm:grid-cols-10 gap-y-5 gap-x-2"></div>
+      </div>
+    </section>
+
+    <!-- BUTTONS -->
+    <section id="buttons" class="scroll-mt-6">
+      <div class="sechead">Components</div>
+      <h2 class="h2">버튼</h2>
+      <p class="lead mt-2 max-w-2xl">변형 6종(solid · outline · soft · subtle · ghost · link)과 크기 5단(xs~xl). 한 화면의 주 액션은 solid 1개로 제한합니다.</p>
+
+      <div class="card p-6 mt-6 space-y-6">
+        <div>
+          <div class="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Variants — primary</div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 inline-flex items-center gap-1.5"><i data-lucide="zap" style="width:14px;height:14px"></i>Solid</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium ring-1 ring-inset ring-primary-500 text-primary-700 hover:bg-primary-50">Outline</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-primary-50 text-primary-700 hover:bg-primary-100">Soft</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-primary-50 ring-1 ring-inset ring-primary-500/25 text-primary-700 hover:bg-primary-100">Subtle</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium text-primary-700 hover:bg-primary-50">Ghost</button>
+            <button class="h-8 px-1 rounded-md text-sm font-medium text-primary-600 hover:underline underline-offset-4">Link</button>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-6">
+          <div class="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Variants — neutral</div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-slate-900 text-white hover:bg-slate-800">Solid</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-white ring-1 ring-inset ring-slate-300 text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5"><i data-lucide="download" style="width:14px;height:14px"></i>Outline</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200">Soft</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100">Ghost</button>
+            <button class="h-8 w-8 rounded-md text-slate-700 hover:bg-slate-100 inline-flex items-center justify-center"><i data-lucide="ellipsis" style="width:16px;height:16px"></i></button>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-6">
+          <div class="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Sizes</div>
+          <div class="flex flex-wrap items-end gap-2.5">
+            <button class="h-6 px-2 rounded-md text-xs font-medium bg-primary-500 text-white">xs · 24</button>
+            <button class="h-7 px-2.5 rounded-md text-xs font-medium bg-primary-500 text-white">sm · 28</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-primary-500 text-white">md · 32</button>
+            <button class="h-9 px-3.5 rounded-md text-sm font-medium bg-primary-500 text-white">lg · 36</button>
+            <button class="h-10 px-4 rounded-md text-base font-medium bg-primary-500 text-white">xl · 40</button>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-6">
+          <div class="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mb-3">States — error · disabled</div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-red-500 text-white hover:bg-red-600">위험 Solid</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium ring-1 ring-inset ring-red-500 text-red-700 hover:bg-red-50">위험 Outline</button>
+            <button class="h-8 px-3 rounded-md text-sm font-medium bg-primary-500 text-white opacity-50 pointer-events-none">Disabled</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BADGES -->
+    <section id="badges" class="scroll-mt-6">
+      <div class="sechead">Components</div>
+      <h2 class="h2">배지 &amp; 상태</h2>
+      <p class="lead mt-2 max-w-2xl">기본 variant는 <span class="mono text-[12px]">subtle</span>(연한 배경 + 동색 링). 권한·상태·채널을 색으로 구분합니다.</p>
+
+      <div class="grid md:grid-cols-3 gap-4 mt-6">
+        <div class="card p-5">
+          <h3 class="h3 mb-3">권한</h3>
+          <div class="flex flex-wrap gap-2" id="role-badges"></div>
+        </div>
+        <div class="card p-5">
+          <h3 class="h3 mb-3">상태</h3>
+          <div class="flex flex-wrap gap-2">
+            <span class="inline-flex items-center gap-1 h-5 px-2 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-500/20"><i data-lucide="circle-check" style="width:12px;height:12px"></i>활성</span>
+            <span class="inline-flex items-center gap-1 h-5 px-2 rounded-md text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-500/20"><i data-lucide="circle-pause" style="width:12px;height:12px"></i>휴면</span>
+            <span class="inline-flex items-center gap-1 h-5 px-2 rounded-md text-xs font-medium bg-red-50 text-red-700 ring-1 ring-inset ring-red-500/20"><i data-lucide="circle-x" style="width:12px;height:12px"></i>중지</span>
+          </div>
+          <h3 class="h3 mb-3 mt-5">variant</h3>
+          <div class="flex flex-wrap gap-2">
+            <span class="inline-flex items-center h-5 px-2 rounded-md text-xs font-medium bg-primary-500 text-white">solid</span>
+            <span class="inline-flex items-center h-5 px-2 rounded-md text-xs font-medium bg-primary-50 text-primary-700">soft</span>
+            <span class="inline-flex items-center h-5 px-2 rounded-md text-xs font-medium bg-primary-50 text-primary-700 ring-1 ring-inset ring-primary-500/20">subtle</span>
+            <span class="inline-flex items-center h-5 px-2 rounded-md text-xs font-medium text-primary-700 ring-1 ring-inset ring-primary-500/40">outline</span>
+          </div>
+        </div>
+        <div class="card p-5">
+          <h3 class="h3 mb-3">채널 칩</h3>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold ring-1 ring-inset bg-indigo-50 text-indigo-700 ring-indigo-500/20">PUSH</span>
+            <span class="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold ring-1 ring-inset bg-primary-50 text-primary-700 ring-primary-500/20">RCS</span>
+            <span class="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-500/20">SMS</span>
+            <span class="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-500/20">알림톡</span>
+          </div>
+          <h3 class="h3 mb-3 mt-5">시스템 상태</h3>
+          <div class="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-emerald-50 ring-1 ring-inset ring-emerald-200">
+            <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="text-xs text-emerald-700 font-medium">시스템 정상 · 14ms</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORMS -->
+    <section id="forms" class="scroll-mt-6">
+      <div class="sechead">Components</div>
+      <h2 class="h2">폼 컨트롤</h2>
+      <p class="lead mt-2 max-w-2xl">입력류 기본 높이 28~32px, 반경 6px, 보더 <span class="mono text-[12px]">ring-slate-300</span>, 포커스 <span class="mono text-[12px]">ring-2 ring-primary-500</span>.</p>
+
+      <div class="card p-6 mt-6 grid md:grid-cols-2 gap-x-10 gap-y-6">
+        <div class="space-y-4">
+          <label class="block">
+            <span class="text-[13px] font-medium text-slate-700">텍스트 입력</span>
+            <div class="relative mt-1.5">
+              <i data-lucide="search" class="text-slate-400" style="width:16px;height:16px;position:absolute;left:10px;top:50%;transform:translateY(-50%)"></i>
+              <input class="w-full h-8 pl-8 pr-3 text-sm bg-white rounded-md ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="아이디, 이름, 이메일 검색" />
+            </div>
+          </label>
+          <label class="block">
+            <span class="text-[13px] font-medium text-slate-700">셀렉트</span>
+            <button class="mt-1.5 w-full h-8 px-3 rounded-md bg-white ring-1 ring-inset ring-slate-300 inline-flex items-center justify-between text-sm text-slate-900">
+              전체 권한 <i data-lucide="chevron-down" class="text-slate-500" style="width:16px;height:16px"></i>
+            </button>
+          </label>
+          <label class="block">
+            <span class="text-[13px] font-medium text-slate-700">비활성</span>
+            <input disabled value="수정 불가" class="mt-1.5 w-full h-8 px-3 text-sm rounded-md ring-1 ring-inset ring-slate-200 bg-slate-50 text-slate-400" />
+          </label>
+        </div>
+        <div class="space-y-5">
+          <div>
+            <span class="text-[13px] font-medium text-slate-700 block mb-2">체크박스 · 라디오</span>
+            <div class="flex flex-col gap-2.5">
+              <label class="inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked class="size-4 rounded ring-1 ring-inset ring-slate-300 text-primary-500 focus:ring-primary-500"/>전체 선택</label>
+              <label class="inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" class="size-4 rounded ring-1 ring-inset ring-slate-300 text-primary-500 focus:ring-primary-500"/>휴면 계정 포함</label>
+              <label class="inline-flex items-center gap-2 text-sm text-slate-700"><input type="radio" name="r" checked class="size-4 ring-1 ring-inset ring-slate-300 text-primary-500 focus:ring-primary-500"/>운영자</label>
+              <label class="inline-flex items-center gap-2 text-sm text-slate-700"><input type="radio" name="r" class="size-4 ring-1 ring-inset ring-slate-300 text-primary-500 focus:ring-primary-500"/>검수자</label>
+            </div>
+          </div>
+          <div>
+            <span class="text-[13px] font-medium text-slate-700 block mb-2">세그먼트 · pill 필터</span>
+            <div class="flex gap-1.5">
+              <button class="h-7 px-3 rounded-full text-xs font-medium ring-1 ring-inset ring-primary-500 bg-primary-50 text-primary-700">전체</button>
+              <button class="h-7 px-3 rounded-full text-xs font-medium ring-1 ring-inset ring-slate-200 bg-white text-slate-600 hover:bg-slate-50">활성</button>
+              <button class="h-7 px-3 rounded-full text-xs font-medium ring-1 ring-inset ring-slate-200 bg-white text-slate-600 hover:bg-slate-50">휴면</button>
+              <button class="h-7 px-3 rounded-full text-xs font-medium ring-1 ring-inset ring-slate-200 bg-white text-slate-600 hover:bg-slate-50">중지</button>
+            </div>
+          </div>
+          <div>
+            <span class="text-[13px] font-medium text-slate-700 block mb-2">토글</span>
+            <button class="w-10 h-6 rounded-full bg-primary-500 relative"><span class="absolute top-0.5 right-0.5 size-5 rounded-full bg-white shadow"></span></button>
+            <button class="w-10 h-6 rounded-full bg-slate-200 relative ml-2"><span class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow"></span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TABLE -->
+    <section id="table" class="scroll-mt-6">
+      <div class="sechead">Components</div>
+      <h2 class="h2">테이블</h2>
+      <p class="lead mt-2 max-w-2xl">헤더 <span class="mono text-[12px]">bg-slate-50/60</span> + 대문자 라벨, 행 구분 <span class="mono text-[12px]">divide-slate-100</span>, 호버 <span class="mono text-[12px]">bg-slate-50/60</span>, 선택 행 <span class="mono text-[12px]">bg-primary-50/60</span>.</p>
+
+      <div class="card overflow-hidden mt-6">
+        <table class="w-full text-sm whitespace-nowrap">
+          <thead class="bg-slate-50/60 text-slate-500">
+            <tr>
+              <th class="px-4 py-2.5 w-10 text-left"><input type="checkbox" class="size-4 rounded ring-1 ring-inset ring-slate-300 text-primary-500"/></th>
+              <th class="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wider">아이디</th>
+              <th class="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wider">이름</th>
+              <th class="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wider">권한</th>
+              <th class="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wider">채널</th>
+              <th class="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wider">상태</th>
+              <th class="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wider">최근 접속</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100" id="demo-rows"></tbody>
+        </table>
+        <div class="px-5 py-3 flex items-center justify-between border-t border-slate-100">
+          <span class="text-xs text-slate-500">1 – 3 / <b class="text-slate-700">8</b>건</span>
+          <div class="flex items-center gap-1">
+            <button class="size-7 rounded-md ring-1 ring-inset ring-slate-200 bg-white text-slate-500 inline-flex items-center justify-center"><i data-lucide="chevron-left" style="width:14px;height:14px"></i></button>
+            <button class="size-7 rounded-md text-xs font-medium ring-1 ring-inset ring-primary-500 bg-primary-50 text-primary-700">1</button>
+            <button class="size-7 rounded-md text-xs font-medium ring-1 ring-inset ring-slate-200 bg-white text-slate-600">2</button>
+            <button class="size-7 rounded-md text-xs font-medium ring-1 ring-inset ring-slate-200 bg-white text-slate-600">3</button>
+            <button class="size-7 rounded-md ring-1 ring-inset ring-slate-200 bg-white text-slate-500 inline-flex items-center justify-center"><i data-lucide="chevron-right" style="width:14px;height:14px"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NAV -->
+    <section id="nav" class="scroll-mt-6">
+      <div class="sechead">Components</div>
+      <h2 class="h2">탭 &amp; 내비게이션</h2>
+      <div class="grid md:grid-cols-2 gap-4 mt-6">
+        <div class="card p-6">
+          <h3 class="h3 mb-3">탭 (pill)</h3>
+          <div class="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            <button class="h-8 px-3.5 rounded-md text-sm bg-white text-slate-900 font-semibold shadow-sm">계정 관리</button>
+            <button class="h-8 px-3.5 rounded-md text-sm text-slate-500 font-medium hover:text-slate-700">발송 내역</button>
+            <button class="h-8 px-3.5 rounded-md text-sm text-slate-500 font-medium hover:text-slate-700">크레딧</button>
+          </div>
+          <h3 class="h3 mb-3 mt-6">브레드크럼</h3>
+          <div class="flex items-center gap-1.5 text-sm text-slate-500">
+            <i data-lucide="home" style="width:14px;height:14px"></i>
+            <i data-lucide="chevron-right" class="text-slate-300" style="width:14px;height:14px"></i>
+            <span>회원/고객사</span>
+            <i data-lucide="chevron-right" class="text-slate-300" style="width:14px;height:14px"></i>
+            <span class="text-slate-900 font-medium">(주)춘향뎐</span>
+          </div>
+        </div>
+        <div class="card p-4">
+          <h3 class="h3 mb-3 px-2">LNB 항목</h3>
+          <div class="space-y-0.5">
+            <div class="h-9 px-2 rounded-md flex items-center gap-2 bg-primary-50 text-primary-700 font-semibold text-sm">
+              <span class="inline-flex items-center justify-center size-6 rounded-md bg-primary-100 text-primary-700"><i data-lucide="users-round" style="width:16px;height:16px"></i></span>
+              회원/고객사
+              <i data-lucide="chevron-down" class="ml-auto text-slate-400" style="width:16px;height:16px"></i>
+            </div>
+            <div class="h-8 pl-9 pr-2 rounded-md flex items-center text-[13px] text-primary-700 font-semibold">
+              <span class="inline-block size-1 rounded-full bg-primary-600 -ml-2 mr-1"></span>계정
+            </div>
+            <div class="h-8 pl-9 pr-2 rounded-md flex items-center text-[13px] text-slate-600 hover:bg-slate-100">고객사</div>
+            <div class="h-8 pl-9 pr-2 rounded-md flex items-center justify-between text-[13px] text-slate-600 hover:bg-slate-100">
+              감사로그 <span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-red-50 text-red-700">3</span>
+            </div>
+            <div class="h-9 px-2 rounded-md flex items-center gap-2 text-slate-600 font-medium text-sm hover:bg-slate-100">
+              <span class="inline-flex items-center justify-center size-6 rounded-md bg-slate-100 text-slate-500"><i data-lucide="send" style="width:16px;height:16px"></i></span>
+              발송 관리
+              <i data-lucide="chevron-down" class="ml-auto text-slate-400" style="width:16px;height:16px"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CARDS & MODAL -->
+    <section id="cards" class="scroll-mt-6">
+      <div class="sechead">Components</div>
+      <h2 class="h2">카드 &amp; 모달</h2>
+      <div class="grid md:grid-cols-2 gap-4 mt-6">
+        <div>
+          <h3 class="h3 mb-3">통계 카드</h3>
+          <div class="card p-5">
+            <div class="flex items-center gap-1.5 text-xs text-slate-500 font-medium"><i data-lucide="wallet" style="width:14px;height:14px"></i>잔여 크레딧</div>
+            <div class="text-lg font-semibold text-primary-700 tracking-tight mt-1" style="font-variant-numeric:tabular-nums">950,000</div>
+            <div class="text-[11px] text-slate-400">≒ ₩9,450,000</div>
+          </div>
+          <h3 class="h3 mb-3 mt-5">알림 배너</h3>
+          <div class="rounded-lg bg-amber-50 ring-1 ring-inset ring-amber-200 p-3.5 flex gap-2.5">
+            <i data-lucide="triangle-alert" class="text-amber-600 shrink-0 mt-0.5" style="width:16px;height:16px"></i>
+            <div class="text-[13px] text-amber-800 leading-relaxed">FCM 서버키가 7일 후 만료됩니다. 재발급을 진행하세요.</div>
+          </div>
+        </div>
+        <div>
+          <h3 class="h3 mb-3">다이얼로그</h3>
+          <div class="rounded-xl bg-white ring-1 ring-slate-200 shadow-2xl overflow-hidden">
+            <div class="px-5 pt-4 pb-3 flex items-start gap-3 border-b border-slate-100">
+              <span class="inline-flex items-center justify-center size-9 rounded-lg bg-primary-50 text-primary-700"><i data-lucide="settings-2" style="width:16px;height:16px"></i></span>
+              <div class="flex-1">
+                <div class="text-[15px] font-semibold text-slate-900">계정 권한 변경</div>
+                <div class="text-xs text-slate-500 mt-0.5">변경 즉시 적용되며 감사 로그에 기록됩니다.</div>
+              </div>
+              <button class="size-7 rounded-md text-slate-400 hover:bg-slate-100 inline-flex items-center justify-center"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+            </div>
+            <div class="p-5">
+              <div class="rounded-lg ring-1 ring-slate-200 px-3.5 py-2.5 flex items-center gap-3">
+                <span class="inline-flex items-center justify-center size-9 rounded-full bg-sky-100 text-sky-700 text-sm font-semibold">김</span>
+                <div class="flex-1"><div class="text-[11px] text-slate-400">맑은소프트</div><div class="text-sm font-semibold text-slate-900">김영자 <span class="text-slate-500 font-normal">(Oja)</span></div></div>
+                <span class="inline-flex items-center h-5 px-2 rounded-md text-xs font-medium bg-primary-50 text-primary-700 ring-1 ring-inset ring-primary-500/20">현재: 운영자</span>
+              </div>
+            </div>
+            <div class="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex justify-end gap-2">
+              <button class="h-9 px-3.5 rounded-md text-sm font-medium bg-white ring-1 ring-inset ring-slate-300 text-slate-700 hover:bg-slate-50">취소</button>
+              <button class="h-9 px-3.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 inline-flex items-center gap-1.5"><i data-lucide="check" style="width:16px;height:16px"></i>변경 적용</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LAYOUT -->
+    <section id="layout" class="scroll-mt-6">
+      <div class="sechead">활용</div>
+      <h2 class="h2">레이아웃</h2>
+      <p class="lead mt-2 max-w-2xl">고정 LNB(256px) + 본문 + 우측 보조 패널(360px) 3분할이 기본 골격입니다. 본문 패딩 24px, 컬럼 갭 20px.</p>
+      <div class="card p-4 mt-6">
+        <div class="flex gap-3 h-64">
+          <div class="w-24 shrink-0 rounded-md bg-slate-100 ring-1 ring-slate-200 flex flex-col items-center justify-center gap-1 text-[11px] text-slate-500">
+            <i data-lucide="panel-left" style="width:18px;height:18px"></i>LNB<br/>256
+          </div>
+          <div class="flex-1 flex flex-col gap-3">
+            <div class="h-10 rounded-md bg-slate-100 ring-1 ring-slate-200 flex items-center px-3 text-[11px] text-slate-500">TopBar · 64</div>
+            <div class="flex-1 rounded-md bg-primary-50/50 ring-1 ring-primary-200/60 flex items-center justify-center text-[11px] text-primary-700">본문 콘텐츠</div>
+          </div>
+          <div class="w-32 shrink-0 rounded-md bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center text-[11px] text-slate-500 text-center px-2">보조 패널<br/>360</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DO & DON'T -->
+    <section id="dodont" class="scroll-mt-6">
+      <div class="sechead">활용</div>
+      <h2 class="h2">Do &amp; Don't</h2>
+      <div class="grid md:grid-cols-2 gap-4 mt-6">
+        <div class="card p-5">
+          <div class="inline-flex items-center gap-1.5 text-emerald-700 text-[13px] font-semibold mb-3"><i data-lucide="check-circle-2" style="width:16px;height:16px"></i>권장</div>
+          <ul class="space-y-2.5 text-[13px] text-slate-600 leading-relaxed">
+            <li class="flex gap-2"><span class="text-emerald-500 mt-0.5">•</span>화면당 solid 주 액션 1개, 나머지는 outline·ghost</li>
+            <li class="flex gap-2"><span class="text-emerald-500 mt-0.5">•</span>구획은 ring-1 slate-200, 그림자는 떠 있는 요소만</li>
+            <li class="flex gap-2"><span class="text-emerald-500 mt-0.5">•</span>수치는 tabular-nums로 자릿수 정렬</li>
+            <li class="flex gap-2"><span class="text-emerald-500 mt-0.5">•</span>상태·채널은 정해진 색 매핑을 일관되게 사용</li>
+          </ul>
+        </div>
+        <div class="card p-5">
+          <div class="inline-flex items-center gap-1.5 text-red-700 text-[13px] font-semibold mb-3"><i data-lucide="x-circle" style="width:16px;height:16px"></i>지양</div>
+          <ul class="space-y-2.5 text-[13px] text-slate-600 leading-relaxed">
+            <li class="flex gap-2"><span class="text-red-400 mt-0.5">•</span>그라데이션 배경·과한 그림자로 표면 강조</li>
+            <li class="flex gap-2"><span class="text-red-400 mt-0.5">•</span>토큰 밖의 임의 색·반경·폰트 크기 도입</li>
+            <li class="flex gap-2"><span class="text-red-400 mt-0.5">•</span>의미 없는 색 사용(장식적 컬러 배지 남발)</li>
+            <li class="flex gap-2"><span class="text-red-400 mt-0.5">•</span>14px 미만 본문, 44px 미만 터치 타깃</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer class="pt-10 border-t border-slate-200 text-[12px] text-slate-400 flex items-center justify-between">
+      <span>맑은 노티 관리자 · 스타일 가이드 v1.0</span>
+      <span class="mono">DM Sans · #2B7FFF · radius 6</span>
+    </footer>
+  </main>
+</div>
+
+<script>
+const RAMPS = {
+  primary: [['50','#EFF6FF'],['100','#DBEAFE'],['300','#8EC5FF'],['400','#51A2FF'],['500','#2B7FFF'],['600','#155DFC'],['700','#1447E6']],
+  slate: [['50','#F8FAFC'],['100','#F1F5F9'],['200','#E2E8F0'],['300','#CAD5E2'],['400','#90A1B9'],['500','#62748E'],['700','#314158'],['800','#1D293D'],['900','#0F172B']],
+  legacy: [['primary','#027CFA'],['mainblue','#4FC0FC'],['indigo','#6756ED'],['orange','#F55F02'],['red','#FF0000'],['ink','#222222']],
+};
+function isDark(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return (0.299*r+0.587*g+0.114*b)<150;}
+function swatchHTML(label, hex, big){
+  const txt = isDark(hex) ? 'text-white/90' : 'text-slate-900/80';
+  return `<div>
+    <div class="swatch ${big?'h-20':''}" style="background:${hex}"></div>
+    <div class="mt-1.5 text-[12px] font-semibold text-slate-700">${label}</div>
+    <div class="text-[11px] text-slate-400 mono">${hex}</div>
+  </div>`;
+}
+document.getElementById('ramp-primary').innerHTML = RAMPS.primary.map(([l,h])=>swatchHTML(l,h)).join('');
+document.getElementById('ramp-slate').innerHTML   = RAMPS.slate.map(([l,h])=>swatchHTML(l,h)).join('');
+document.getElementById('ramp-legacy').innerHTML  = RAMPS.legacy.map(([l,h])=>swatchHTML(l,h)).join('');
+
+const STATUS = [
+  ['Success','발송 성공·활성','#D9FBE8','#00C16A','#007F45'],
+  ['Warning','만료 임박·휴면','#FEF3C7','#FD9A00','#BB4D00'],
+  ['Error','실패·중지','#FEE2E2','#FB2C36','#C10007'],
+  ['Info','안내·진행','#DFF2FE','#00A6F4','#0069A8'],
+];
+document.getElementById('ramp-status').innerHTML = STATUS.map(([name,use,c100,c500,c700])=>`
+  <div class="card p-4">
+    <div class="flex gap-1.5 mb-3">
+      <div class="flex-1 h-9 rounded-md" style="background:${c100}"></div>
+      <div class="flex-1 h-9 rounded-md" style="background:${c500}"></div>
+      <div class="flex-1 h-9 rounded-md" style="background:${c700}"></div>
+    </div>
+    <div class="text-[13px] font-semibold text-slate-900">${name}</div>
+    <div class="text-[11px] text-slate-400">${use}</div>
+    <div class="text-[10px] text-slate-400 mono mt-1">${c500}</div>
+  </div>`).join('');
+
+const ACCENT = [
+  ['Indigo','PUSH','#E0E7FF','#615FFF','#432DD7'],
+  ['Blue','RCS','#DBEAFE','#2B7FFF','#1447E6'],
+  ['Emerald','SMS','#D0FAE5','#00C16A','#007A55'],
+];
+document.getElementById('ramp-accent').innerHTML = ACCENT.map(([name,use,c1,c5,c7])=>`
+  <div class="card p-4">
+    <div class="flex gap-1.5 mb-3">
+      <div class="flex-1 h-9 rounded-md" style="background:${c1}"></div>
+      <div class="flex-1 h-9 rounded-md" style="background:${c5}"></div>
+      <div class="flex-1 h-9 rounded-md" style="background:${c7}"></div>
+    </div>
+    <div class="text-[13px] font-semibold text-slate-900">${name} <span class="text-slate-400 font-normal">· ${use}</span></div>
+    <div class="text-[10px] text-slate-400 mono mt-1">${c5}</div>
+  </div>`).join('');
+
+// Type scale
+const TYPE = [
+  ['4xl','36 / 40','800','페이지 타이틀'],
+  ['3xl','30 / 36','700','섹션 헤드'],
+  ['2xl','24 / 32','700','페이지 제목'],
+  ['xl','20 / 28','700','카드 회사명'],
+  ['lg','18 / 28','600','KPI 값'],
+  ['base','16 / 24','400','모달 제목·강조 본문'],
+  ['sm','14 / 20','400','본문 기본'],
+  ['xs','12 / 16','500','라벨·메타·캡션'],
+];
+const PX = { '4xl':36,'3xl':30,'2xl':24,'xl':20,'lg':18,'base':16,'sm':14,'xs':12 };
+document.getElementById('type-scale').innerHTML = TYPE.map(([t,lh,w,use])=>`
+  <div class="flex items-baseline gap-5 px-5 py-3.5">
+    <div class="w-44 shrink-0">
+      <span class="mono text-[12px] text-primary-600">text-${t}</span>
+      <div class="text-[11px] text-slate-400">${lh} · ${w}</div>
+    </div>
+    <div class="flex-1 min-w-0 text-slate-900 truncate" style="font-size:${PX[t]}px;font-weight:${w};letter-spacing:-0.02em">맑은 노티 관리자 Aa 123</div>
+    <div class="hidden md:block text-[12px] text-slate-400 shrink-0">${use}</div>
+  </div>`).join('');
+
+// Spacing
+const SP = [['0.5',2],['1',4],['1.5',6],['2',8],['2.5',10],['3',12],['3.5',14],['4',16],['5',20],['6',24],['10',40]];
+document.getElementById('spacing-scale').innerHTML = SP.map(([t,px])=>`
+  <div class="flex items-center gap-4">
+    <div class="w-16 shrink-0 text-[12px]"><span class="mono text-slate-700">${t}</span></div>
+    <div class="w-12 shrink-0 text-[11px] text-slate-400 mono">${px}px</div>
+    <div class="h-3 rounded bg-primary-400" style="width:${px}px"></div>
+  </div>`).join('');
+
+// Radius
+const RAD = [['sm',2],['DEFAULT',4],['md',6],['lg',8],['xl',10],['full',999]];
+document.getElementById('radius-scale').innerHTML = RAD.map(([t,px])=>`
+  <div class="text-center">
+    <div class="size-16 bg-primary-50 ring-1 ring-inset ring-primary-300" style="border-radius:${px}px"></div>
+    <div class="mt-2 text-[12px] font-semibold text-slate-700">${px===999?'full':px+'px'}</div>
+    <div class="text-[10px] text-slate-400 mono">${t}</div>
+  </div>`).join('');
+
+// Icons
+const ICONS = ['layout-dashboard','users-round','send','file-text','bar-chart-3','plug','credit-card','settings-2','message-square-dot','bell','search','calendar','wallet','user-cog','download','plus','ellipsis','circle-check','triangle-alert','key-round','filter','trash-2','pencil','eye','lock','mail','refresh-cw','chevron-down','external-link','sparkles'];
+document.getElementById('icon-grid').innerHTML = ICONS.map(n=>`
+  <div class="flex flex-col items-center gap-1.5">
+    <span class="inline-flex items-center justify-center size-10 rounded-md bg-slate-50 ring-1 ring-slate-200 text-slate-700"><i data-lucide="${n}" style="width:18px;height:18px"></i></span>
+    <span class="text-[10px] text-slate-400 truncate max-w-full">${n}</span>
+  </div>`).join('');
+
+// Role badges
+const ROLES = [['슈퍼관리자','red'],['운영자','blue'],['검수자','indigo'],['회계','amber'],['고객지원','emerald'],['시스템','slate'],['조회 전용','slate']];
+const ROLEMAP = {
+  red:'bg-red-50 text-red-700 ring-red-500/20', blue:'bg-primary-50 text-primary-700 ring-primary-500/20',
+  indigo:'bg-indigo-50 text-indigo-700 ring-indigo-500/20', amber:'bg-amber-50 text-amber-700 ring-amber-500/20',
+  emerald:'bg-emerald-50 text-emerald-700 ring-emerald-500/20', slate:'bg-slate-100 text-slate-700 ring-slate-300',
+};
+document.getElementById('role-badges').innerHTML = ROLES.map(([n,c])=>`<span class="inline-flex items-center h-5 px-2 rounded-md text-xs font-medium ring-1 ring-inset ${ROLEMAP[c]}">${n}</span>`).join('');
+
+// Demo table rows
+const ROWS = [
+  ['admin2','홍길동','슈퍼관리자','red',['PUSH','RCS','SMS'],'활성','em','2026.09.05 14:22',true],
+  ['Oja','김영자','운영자','blue',['PUSH','SMS'],'활성','em','2026.09.05 11:08',false],
+  ['viewer01','성춘향','조회 전용','slate',['—'],'중지','rd','2026.08.21 16:00',false],
+];
+const CH = c => c==='PUSH'?'bg-indigo-50 text-indigo-700 ring-indigo-500/20':c==='RCS'?'bg-primary-50 text-primary-700 ring-primary-500/20':c==='SMS'?'bg-emerald-50 text-emerald-700 ring-emerald-500/20':'bg-slate-50 text-slate-400 ring-slate-200';
+const ST = s => s==='활성'?['bg-emerald-50 text-emerald-700 ring-emerald-500/20','circle-check']:s==='휴면'?['bg-amber-50 text-amber-700 ring-amber-500/20','circle-pause']:['bg-red-50 text-red-700 ring-red-500/20','circle-x'];
+const AV = ['bg-rose-100 text-rose-700','bg-sky-100 text-sky-700','bg-violet-100 text-violet-700'];
+document.getElementById('demo-rows').innerHTML = ROWS.map((r,i)=>{
+  const [st,sic] = ST(r[5]);
+  return `<tr class="${r[8]?'bg-primary-50/60':'hover:bg-slate-50/60'} transition-colors">
+    <td class="px-4 py-3"><input type="checkbox" ${r[8]?'checked':''} class="size-4 rounded ring-1 ring-inset ring-slate-300 text-primary-500"/></td>
+    <td class="px-4 py-3"><a class="text-primary-700 font-semibold">${r[0]}</a></td>
+    <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="inline-flex items-center justify-center size-6 rounded-full text-[11px] font-semibold ${AV[i%3]}">${r[1][0]}</span><span class="text-slate-900">${r[1]}</span></div></td>
+    <td class="px-4 py-3"><span class="inline-flex items-center h-5 px-2 rounded-md text-xs font-medium ring-1 ring-inset ${ROLEMAP[r[3]]}">${r[2]}</span></td>
+    <td class="px-4 py-3"><div class="flex gap-1">${r[4].map(c=>`<span class="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold ring-1 ring-inset ${CH(c)}">${c}</span>`).join('')}</div></td>
+    <td class="px-4 py-3"><span class="inline-flex items-center gap-1 h-5 px-2 rounded-md text-xs font-medium ring-1 ring-inset ${st}"><i data-lucide="${sic}" style="width:12px;height:12px"></i>${r[5]}</span></td>
+    <td class="px-4 py-3 text-xs text-slate-500" style="font-variant-numeric:tabular-nums">${r[7]}</td>
+  </tr>`;
+}).join('');
+
+if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.75 } });
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{
+  "_comment": "이 파일을 target.json 으로 복사한 뒤 실제 값으로 채우세요. target.json 은 비밀번호를 포함하므로 .gitignore 에 등록되어 있습니다(README 참조). 비밀번호는 가능하면 환경변수(${ENV:VAR}) 로 주입하세요.",
+
+  "service": "마이샵(예시)",
+  "baseUrl": "https://staging.myshop.example.com",
+
+  "viewports": {
+    "mobile": { "width": 390, "height": 844, "deviceScaleFactor": 3 },
+    "desktop": { "width": 1440, "height": 900, "deviceScaleFactor": 1 }
+  },
+
+  "auth": {
+    "required": true,
+    "mode": "form",
+    "_modeOptions": "form | sso | basic | storageState | none",
+
+    "loginUrl": "https://staging.myshop.example.com/login",
+    "steps": [
+      { "action": "fill", "selector": "input[name=email]", "value": "${ENV:QA_TEST_EMAIL}" },
+      { "action": "fill", "selector": "input[name=password]", "value": "${ENV:QA_TEST_PASSWORD}" },
+      { "action": "click", "selector": "button[type=submit]" },
+      { "action": "waitFor", "selector": "[data-testid=my-nickname]" }
+    ],
+    "successCheck": { "type": "selectorVisible", "selector": "[data-testid=my-nickname]" },
+
+    "storageStatePath": "config/.auth/state.json",
+    "_storageStateNote": "최초 1회 로그인 후 세션을 state.json 으로 저장해두면, 페르소나 20명이 매번 로그인하지 않고 세션을 재사용해 속도/안정성이 크게 향상됩니다.",
+
+    "stagingBasicAuth": {
+      "_note": "스테이징 진입에 별도 HTTP Basic 게이트가 있을 때만 사용",
+      "enabled": false,
+      "username": "${ENV:STAGING_USER}",
+      "password": "${ENV:STAGING_PASS}"
+    }
+  },
+
+  "testData": {
+    "_note": "테스트가 만들어내는 데이터의 격리/정리 정책",
+    "isolation": "각 페르소나는 고유 식별 접두어(QA-P01- 등)로 데이터를 생성해 충돌 방지",
+    "cleanup": "테스트 후 생성 데이터 정리 방법(있으면 기재)"
+  },
+
+  "guards": {
+    "_note": "절대 건드리면 안 되는 영역(실결제·실발송·관리자 삭제 등) — 페르소나 테스터가 회피",
+    "forbiddenPaths": ["/admin", "/payment/real-approve"],
+    "forbiddenActions": ["실제 결제 최종 승인", "실제 알림톡/메일 대량 발송", "데이터 영구 삭제"]
+  },
+
+  "run": {
+    "personaCount": 20,
+    "concurrency": 5,
+    "perPersonaTimeoutSec": 600,
+    "captureScreenshots": true,
+    "captureConsoleErrors": true
+  }
+}

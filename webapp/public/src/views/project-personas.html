@@ -1,0 +1,133 @@
+<div class="crumb"><a href="#/projects">프로젝트</a> › {{ project.name }}</div>
+<div class="ptabs">
+  <a :href="'#/project-overview?id=' + id">개요</a>
+  <a class="active" :href="'#/project-personas?id=' + id">페르소나</a>
+  <a :href="'#/project-runs?id=' + id">시나리오·실행</a>
+  <a :href="'#/project-qa?id=' + id">QA 리스트</a>
+  <a :href="'#/project-settings?id=' + id">설정</a>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>페르소나 배정</h1>
+    <div class="crumb">타깃 고객층을 입력하면 <a href="#/personas">기본 페르소나 시드(QA 인력풀 · {{ poolSize }}인)</a>에서 적합한 인력을 추출해 이 프로젝트에 배정합니다.</div>
+  </div>
+</div>
+
+<div class="card accent"><div class="card-body">
+  <div class="card-h">QA 인력풀에서 추출</div>
+  <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+    <div class="md:col-span-8">
+      <label class="label">타깃 고객층</label>
+      <input class="input" v-model="audience" placeholder="예: 20~40대 직장인, 모바일 쇼핑 위주 / 고령 어르신, 저시력 포함" />
+      <div v-if="!(audience || '').trim()" class="small text-amber-600 mt-1.5 flex items-center gap-1">
+        <i data-lucide="info" class="size-3.5"></i> 설명을 입력하면 더 정확한 매칭이 가능합니다.
+      </div>
+    </div>
+    <div class="md:col-span-2"><label class="label">인원</label><input class="input" type="number" v-model.number="count" min="1" max="50" step="1" /></div>
+    <div class="md:col-span-2"><button class="btn btn-primary w-full" @click="extract" :disabled="extracting">{{ extracting ? '추출 중…' : '풀에서 추출' }}</button></div>
+  </div>
+  <div class="small muted mt-2">연령·기기·디지털 친숙도·접근성·직군 키워드로 매칭합니다. 적합 인력이 부족하면 <b>추가 페르소나 생성</b>으로 새 인력을 만들 수 있습니다.</div>
+  <div v-if="info" class="small mt-2" :class="info.cls">{{ info.text }}</div>
+
+  <template v-if="cands.length">
+    <div class="flex items-center gap-2 mt-3 mb-2">
+      <button class="btn btn-outline btn-sm" @click="generateMore" :disabled="generating"><i data-lucide="plus"></i> {{ generating ? '생성 중… (수십 초)' : '추가 페르소나 생성하기' }}</button>
+      <div class="flex-1"></div>
+      <span class="small muted">{{ checkedCount }} / {{ cands.length }}명 선택</span>
+      <button class="btn btn-primary" @click="save" :disabled="saving || !checkedCount"><i data-lucide="save"></i> 저장하기<span v-if="checkedCount"> ({{ checkedCount }})</span></button>
+    </div>
+    <div class="overflow-x-auto -mx-5">
+      <table class="tbl">
+        <thead><tr>
+          <th class="w-9"><input type="checkbox" v-model="allChecked" :indeterminate.prop="someChecked" class="size-4 rounded border-slate-300 text-primary-500 focus:ring-primary-500" title="전체 선택/해제" /></th>
+          <th>출처</th><th>ID</th><th>이름</th><th>나이</th><th>성별</th><th>지역</th><th>직업</th><th>친숙도</th><th>기기</th><th>접근성</th><th>한 줄</th>
+        </tr></thead>
+        <tbody>
+          <tr v-for="(p, i) in cands" :key="i" class="row-link" @click="p._checked = !p._checked">
+            <td @click.stop><input type="checkbox" v-model="p._checked" class="size-4 rounded border-slate-300 text-primary-500 focus:ring-primary-500" /></td>
+            <td><span class="badge" :class="p._source === 'new' ? 'reco-yellow' : 'reco-green'">{{ p._source === 'new' ? '신규' : '풀' }}</span></td>
+            <td class="small muted">{{ p.id || '신규' }}</td>
+            <td>{{ p.name }}</td>
+            <td>{{ p.age }}</td>
+            <td class="small">{{ p.gender }}</td>
+            <td class="small">{{ p.region || '' }}</td>
+            <td class="small muted">{{ p.occupation || '' }}</td>
+            <td><span class="badge">{{ p.digitalLiteracy }}</span></td>
+            <td class="small">{{ p.primaryDevice }}</td>
+            <td class="small muted">{{ (p.accessibility || []).join(', ') || '—' }}</td>
+            <td class="small muted">{{ p.quote || '' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-end gap-2 mt-3">
+      <span class="small muted">{{ checkedCount }}명 선택됨</span>
+      <button class="btn btn-primary" @click="save" :disabled="saving || !checkedCount"><i data-lucide="save"></i> {{ saving ? '저장 중…' : '저장하기' }}<span v-if="checkedCount && !saving"> ({{ checkedCount }})</span></button>
+    </div>
+  </template>
+</div></div>
+
+<div class="card mt-3"><div class="card-body">
+  <div class="card-h">이 프로젝트 페르소나 ({{ saved.length }}명)</div>
+  <div v-if="!saved.length" class="empty">아직 배정된 페르소나가 없습니다. 위에서 타깃 고객층을 입력해 추출하세요.</div>
+  <div v-else class="overflow-x-auto -mx-5">
+    <table class="tbl">
+      <thead><tr><th>ID</th><th>이름</th><th>나이</th><th>성별</th><th>지역</th><th>직업</th><th>친숙도</th><th>기기</th><th>접근성</th><th>한 줄</th><th></th></tr></thead>
+      <tbody>
+        <tr v-for="p in saved" :key="p.rowId">
+          <td class="small muted">{{ p.id }}</td>
+          <td>{{ p.name }}</td>
+          <td>{{ p.age }}</td>
+          <td class="small">{{ p.gender }}</td>
+          <td class="small">{{ p.region || '' }}</td>
+          <td class="small muted">{{ p.occupation || '' }}</td>
+          <td><span class="badge">{{ p.digitalLiteracy }}</span></td>
+          <td class="small">{{ p.primaryDevice }}</td>
+          <td class="small muted">{{ (p.accessibility || []).join(', ') || '—' }}</td>
+          <td class="small muted">{{ p.quote || '' }}</td>
+          <td><button class="btn btn-danger-outline btn-sm" @click="openDelete(p)"><i data-lucide="trash-2"></i> 삭제</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div></div>
+
+<!-- 페르소나 배정 해제 — 이중 컨펌 팝업 -->
+<div v-if="showDelete" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDelete">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-md bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">
+        <span v-if="delStage === 1">페르소나 배정 해제</span>
+        <span v-else>정말 삭제할까요?</span>
+      </h2>
+      <button class="icon-btn" @click="closeDelete" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <div class="px-5 py-4">
+      <template v-if="delStage === 1">
+        <p class="text-sm text-slate-700 m-0">
+          <span class="font-semibold text-slate-900">{{ delTarget && (delTarget.name + ' (' + delTarget.id + ')') }}</span> 페르소나를 이 프로젝트에서 배정 해제하시겠어요?
+        </p>
+        <p class="small muted mt-2">인력풀에는 그대로 남으며, 이 프로젝트의 향후 실행에서 제외됩니다.</p>
+      </template>
+      <template v-else>
+        <div class="flex items-start gap-2.5 rounded-md bg-red-50 ring-1 ring-inset ring-red-500/20 px-3 py-2.5">
+          <i data-lucide="triangle-alert" class="size-4 text-red-600 mt-0.5"></i>
+          <p class="text-sm text-red-700 m-0">이 작업은 되돌릴 수 없습니다. <span class="font-semibold">{{ delTarget && delTarget.name }}</span> 을(를) 배정 해제하려면 한 번 더 확인해 주세요.</p>
+        </div>
+      </template>
+      <div v-if="delErr" class="text-red-600 small mt-3">{{ delErr }}</div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+      <template v-if="delStage === 1">
+        <button class="btn btn-outline" type="button" @click="closeDelete">취소</button>
+        <button class="btn btn-danger-outline" type="button" @click="delStage = 2"><i data-lucide="trash-2"></i> 삭제 진행</button>
+      </template>
+      <template v-else>
+        <button class="btn btn-outline" type="button" @click="delStage = 1">뒤로</button>
+        <button class="btn btn-danger" type="button" :disabled="delSaving" @click="confirmDelete"><i data-lucide="trash-2"></i> 배정 해제 확정</button>
+      </template>
+    </div>
+  </div>
+</div>

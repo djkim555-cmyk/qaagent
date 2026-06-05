@@ -1,0 +1,88 @@
+<div class="crumb"><a href="#/projects">프로젝트</a> › {{ project.name }}</div>
+<div class="ptabs">
+  <a :href="'#/project-overview?id=' + id">개요</a>
+  <a :href="'#/project-personas?id=' + id">페르소나</a>
+  <a :href="'#/project-runs?id=' + id">시나리오·실행</a>
+  <a class="active" :href="'#/project-qa?id=' + id">QA 리스트</a>
+  <a :href="'#/project-settings?id=' + id">설정</a>
+</div>
+
+<div class="page-head">
+  <div>
+    <div class="crumb"><a :href="'#/project-qa?id=' + id">← QA 리스트로</a></div>
+    <h1>{{ issue.title || '(제목 없음)' }}<span v-if="issue.confidence === '추정'" class="muted small font-normal"> [추정]</span></h1>
+  </div>
+  <span class="badge" :class="'sev-' + issue.severity">{{ issue.severity || '-' }}</span>
+</div>
+
+<div v-if="loaded && !issue.id" class="empty">이슈를 찾을 수 없습니다. <a :href="'#/project-qa?id=' + id" class="text-mint">QA 리스트</a>로 돌아가세요.</div>
+
+<div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+  <!-- 좌: 현상 / 수정제안 / 화면 캡쳐 -->
+  <div class="lg:col-span-2 space-y-3">
+    <div class="card accent"><div class="card-body">
+      <div class="card-h">현상</div>
+      <p class="text-sm text-slate-700 whitespace-pre-wrap m-0">{{ symptom }}</p>
+    </div></div>
+
+    <div v-if="reproSteps.length" class="card"><div class="card-body">
+      <div class="card-h">재현 단계</div>
+      <ol class="text-sm text-slate-700 list-decimal pl-5 space-y-1 m-0">
+        <li v-for="(step, i) in reproSteps" :key="i">{{ step }}</li>
+      </ol>
+    </div></div>
+
+    <div v-if="hasExpectedActual" class="card"><div class="card-body">
+      <div class="card-h">기대 vs 실제</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <div class="muted small mb-1">기대</div>
+          <p class="text-sm text-slate-700 whitespace-pre-wrap m-0">{{ issue.expected || '-' }}</p>
+        </div>
+        <div>
+          <div class="muted small mb-1">실제</div>
+          <p class="text-sm text-slate-700 whitespace-pre-wrap m-0">{{ issue.actual || '-' }}</p>
+        </div>
+      </div>
+    </div></div>
+
+    <div v-if="issue.impact" class="card"><div class="card-body">
+      <div class="card-h">페르소나 영향</div>
+      <p class="text-sm text-slate-700 whitespace-pre-wrap m-0">{{ issue.impact }}</p>
+    </div></div>
+
+    <div v-if="issue.suggestion" class="card"><div class="card-body">
+      <div class="card-h">수정 제안</div>
+      <p class="text-sm text-slate-700 whitespace-pre-wrap m-0">{{ issue.suggestion }}</p>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+      <div class="card-h">화면 캡쳐 ({{ shots.length }})</div>
+      <div v-if="!shots.length" class="empty small">이 페르소나 실행에서 저장된 스크린샷이 없습니다. (시뮬레이션 모드이거나 캡쳐 미수집)</div>
+      <div v-else class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <a v-for="s in shots" :key="s.file" :href="s.url" target="_blank" class="block ring-1 ring-inset ring-slate-200 rounded-md overflow-hidden hover:ring-2 hover:ring-primary-500 transition">
+          <img :src="s.url" :alt="s.file" class="w-full h-40 object-cover object-top bg-slate-50" loading="lazy" />
+          <div class="small muted px-2 py-1 truncate mono">{{ s.file }}</div>
+        </a>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- 우: 이슈 정보(메타) -->
+  <div class="card"><div class="card-body">
+    <div class="card-h">이슈 정보</div>
+    <div class="overflow-x-auto -mx-5">
+      <table class="tbl"><tbody>
+        <tr><td class="muted">유형</td><td>{{ issue.type || '-' }}</td></tr>
+        <tr><td class="muted">구분</td><td><span class="dot" :class="'dot-' + (issue.category || '미분류')"></span>{{ issue.category || '미분류' }}</td></tr>
+        <tr><td class="muted">상태</td><td><span :class="'st-' + (issue.status || '열림')">{{ issue.status || '열림' }}</span></td></tr>
+        <tr><td class="muted">담당자</td><td>{{ issue.assignee_name || '미배정' }}</td></tr>
+        <tr><td class="muted">신뢰</td><td>{{ issue.confidence || '-' }}</td></tr>
+        <tr><td class="muted">시나리오</td><td class="small">{{ (issue.scenario || '').replace('scenarios/', '') }}</td></tr>
+        <tr><td class="muted">태스크</td><td class="small">{{ issue.task || '-' }}</td></tr>
+        <tr><td class="muted">페르소나</td><td class="small">{{ issue.persona_id }}<span v-if="issue.persona_name"> · {{ issue.persona_name }}</span><span v-if="issue.age_band" class="muted"> ({{ issue.age_band }}/친숙도 {{ issue.digital_literacy }})</span></td></tr>
+        <tr><td class="muted">실행</td><td><a class="text-primary-700 hover:underline cursor-pointer mono small" @click="openRun">{{ issue.run_id }}</a></td></tr>
+      </tbody></table>
+    </div>
+  </div></div>
+</div>

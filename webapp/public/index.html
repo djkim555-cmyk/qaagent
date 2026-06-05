@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QA 에이전트팀</title>
+  <meta name="description" content="페르소나 기반 통합 QA 에이전트 콘솔" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>" />
+
+  <!-- 폰트: DM Sans + DM Mono + Pretendard(한글 폴백) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet" />
+
+  <!-- Tailwind CSS (CDN) + forms 플러그인 — StyleGuide/ 디자인 시스템 -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"DM Sans"', '"Pretendard Variable"', 'Pretendard', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            primary: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#8ec5ff',400:'#51a2ff',500:'#2b7fff',600:'#155dfc',700:'#1447e6',800:'#1e40af',900:'#1e3a8a', DEFAULT:'#2b7fff' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- 공용 디자인 시스템 레이어 (Tailwind CDN JIT 는 외부 CSS 미처리 → 인라인 정의) -->
+  <style type="text/tailwindcss">
+    @layer base {
+      html { scroll-behavior: smooth; }
+      body { font-family:"DM Sans","Pretendard Variable",Pretendard,system-ui,sans-serif; letter-spacing:-0.01em; @apply bg-slate-50 text-slate-900; -webkit-font-smoothing:antialiased; }
+      [data-lucide]{ width:1em; height:1em; }
+      [v-cloak]{ display:none; }
+      /* 최고관리자 전용 요소: <html data-role="super"> 일 때만 표시.
+         CSS 로 결정 → 라우트 전환마다 사이드바가 재렌더돼도 타이밍 경쟁 없이 일관 표시. */
+      html:not([data-role="super"]) [data-super-only] { display: none !important; }
+    }
+    @layer components {
+      /* 타이포 */
+      .sechead { @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-600 mb-2; }
+      .lead { @apply text-sm text-slate-500 leading-relaxed; }
+      .mono { font-family:"DM Mono",monospace; font-variant-numeric:tabular-nums; }
+      .num-tab { font-variant-numeric:tabular-nums; }
+
+      /* 카드 */
+      .card { @apply bg-white rounded-lg ring-1 ring-slate-200; }
+      .card-body { @apply p-5; }
+      .card-h { @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-3; }
+      .accent { @apply ring-0 border-l-[3px] border-primary-500 rounded-l-none; }
+
+      /* 통계 카드 */
+      .stat .num { @apply text-3xl font-extrabold tracking-tight text-slate-900 leading-none; font-variant-numeric:tabular-nums; }
+      .stat .lbl { @apply text-[13px] text-slate-500 mt-1.5; }
+      .stat.mint .num { @apply text-primary-700; }
+
+      /* 모바일 상단바(햄버거) — 데스크톱에서는 숨김 */
+      .topbar { @apply hidden; }
+      /* 사이드바 백드롭 — 모바일 드로어 열림 시에만 표시 */
+      #qaSidebarBackdrop { display:none; }
+
+      /* 모바일(<768px): 사이드바를 오프캔버스 드로어로, 메인은 전체 폭 사용 */
+      @media (max-width:767px){
+        .topbar { @apply flex items-center gap-2 h-14 px-4 sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200; }
+        #qaSidebar { position:fixed; top:0; bottom:0; left:0; height:100%; z-index:50; transform:translateX(-100%); transition:transform .25s ease; box-shadow:0 10px 40px rgba(2,6,23,.18); }
+        #qaSidebar.open { transform:translateX(0); }
+        #qaSidebarBackdrop { position:fixed; inset:0; z-index:40; background:rgba(15,23,42,.4); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
+        #qaSidebarBackdrop.show { display:block; }
+      }
+
+      /* 사이드바 내비 */
+      .nav-link { @apply flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] font-medium text-slate-500 no-underline hover:text-slate-900 hover:bg-slate-100 transition-colors; }
+      .nav-link [data-lucide] { width:18px; height:18px; }
+      .nav-link.nav-active { @apply bg-primary-50 text-primary-700 font-semibold hover:bg-primary-50 hover:text-primary-700; }
+
+      /* 페이지 헤더 / 브레드크럼 */
+      .page-head { @apply flex items-center justify-between gap-3 mb-5 flex-wrap; }
+      .page-head h1 { @apply text-2xl font-bold tracking-tight text-slate-900 m-0; }
+      .crumb { @apply text-[13px] text-slate-500 mb-1; }
+      .crumb a { @apply text-slate-500 no-underline hover:text-primary-600; }
+
+      /* 버튼 */
+      .btn { @apply inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium transition-colors cursor-pointer select-none whitespace-nowrap; }
+      .btn-sm { @apply h-7 px-2.5 text-xs; }
+      .btn-lg { @apply h-9 px-3.5; }
+      .btn-primary { @apply bg-primary-500 text-white hover:bg-primary-600; }
+      .btn-outline { @apply bg-white ring-1 ring-inset ring-slate-300 text-slate-700 hover:bg-slate-50; }
+      .btn-soft { @apply bg-primary-50 text-primary-700 hover:bg-primary-100; }
+      .btn-ghost { @apply text-slate-700 hover:bg-slate-100; }
+      .btn-danger { @apply bg-red-500 text-white hover:bg-red-600; }
+      .btn-danger-outline { @apply ring-1 ring-inset ring-red-500 text-red-700 hover:bg-red-50; }
+      .btn:disabled, .btn.disabled { @apply opacity-50 pointer-events-none; }
+      .icon-btn { @apply inline-flex items-center justify-center size-8 rounded-md text-slate-500 hover:bg-slate-100; }
+
+      /* 폼 컨트롤 */
+      .label { @apply block text-[13px] font-medium text-slate-700 mb-1.5; }
+      .input, .select, .textarea { @apply w-full h-8 px-3 text-sm bg-white rounded-md ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 border-0; }
+      .textarea { @apply h-auto py-2 leading-relaxed; }
+      .input:disabled, .select:disabled, .textarea:disabled { @apply ring-slate-200 bg-slate-50 text-slate-400; }
+
+      /* 배지 */
+      .badge { @apply inline-flex items-center gap-1 h-5 px-2 rounded-md text-xs font-medium ring-1 ring-inset ring-slate-200 bg-white text-slate-600 whitespace-nowrap; }
+      .sev-Blocker { @apply bg-red-50 text-red-700 ring-red-500/20; }
+      .sev-Major   { @apply bg-orange-50 text-orange-700 ring-orange-500/20; }
+      .sev-Minor   { @apply bg-amber-50 text-amber-700 ring-amber-500/20; }
+      .sev-Nitpick { @apply bg-slate-100 text-slate-600 ring-slate-300; }
+      .reco-green  { @apply bg-emerald-50 text-emerald-700 ring-emerald-500/20; }
+      .reco-yellow { @apply bg-amber-50 text-amber-700 ring-amber-500/20; }
+      .reco-red    { @apply bg-red-50 text-red-700 ring-red-500/20; }
+
+      .dot { @apply inline-block size-2 rounded-full mr-1.5 align-middle; }
+      .dot-문의 { @apply bg-sky-500; } .dot-오류 { @apply bg-red-500; }
+      .dot-기능개선 { @apply bg-primary-500; } .dot-제안 { @apply bg-amber-500; } .dot-미분류 { @apply bg-slate-400; }
+      .st-열림 { @apply text-sky-600; } .st-진행중 { @apply text-amber-600; } .st-완료 { @apply text-emerald-600; } .st-보류 { @apply text-slate-500; }
+      .muted { @apply text-slate-500; } .small { @apply text-xs; } .text-mint { @apply text-primary-700; }
+
+      /* 프로젝트 서브탭 */
+      .ptabs { @apply flex gap-1 border-b border-slate-200 mb-5 flex-wrap; }
+      .ptabs a { @apply px-3.5 py-2.5 text-[13px] font-semibold text-slate-500 border-b-2 border-transparent no-underline cursor-pointer hover:text-slate-900; }
+      .ptabs a.active { @apply text-primary-700 border-primary-500; }
+
+      /* 테이블 */
+      table.tbl { @apply w-full text-sm; }
+      table.tbl thead { @apply bg-slate-50/60; }
+      table.tbl th { @apply text-left text-xs font-medium uppercase tracking-wider text-slate-500 px-4 py-2.5 whitespace-nowrap; }
+      table.tbl td { @apply px-4 py-3 align-middle border-t border-slate-100; }
+      table.tbl tbody tr { @apply transition-colors hover:bg-slate-50/60; }
+      .tbl .row-link { @apply cursor-pointer; }
+
+      /* 진척 바 */
+      .bar { @apply h-2 bg-slate-100 rounded-full overflow-hidden; }
+      .bar > i { @apply block h-full bg-primary-500; }
+
+      /* 빈 상태 */
+      .empty { @apply text-center text-slate-500 py-9; }
+
+      /* AI 요약 배너 */
+      .ai-banner { @apply rounded-lg p-4 flex gap-3 items-start text-primary-50; background:linear-gradient(135deg,#1447e6 0%,#0f172b 75%); }
+      .ai-banner .tag { @apply bg-primary-400 text-white font-bold rounded px-2 py-0.5 text-[11px] shrink-0 mt-0.5; }
+
+      /* 진행 로그 (run detail) */
+      .log { @apply bg-slate-900 text-slate-300 rounded-lg p-3.5 h-72 overflow-auto; font:12.5px/1.6 "DM Mono",ui-monospace,monospace; }
+      .log .ev { @apply py-px; } .log .phase { @apply text-emerald-300 font-bold; } .log .error { @apply text-red-300; } .log .t { @apply text-slate-500 mr-1.5; }
+
+      /* 통합 리포트 마크다운 */
+      .report { @apply max-w-3xl text-sm leading-relaxed text-slate-700; }
+      .report h1,.report h2,.report h3 { @apply border-b border-slate-200 pb-1 mt-5 mb-2 font-bold tracking-tight text-slate-900; }
+      .report table { @apply w-full my-3; border-collapse:collapse; }
+      .report th,.report td { @apply border border-slate-200 px-2 py-1.5; }
+      .report code { @apply mono text-[12px] bg-slate-100 rounded px-1; }
+
+      /* 대화형 시나리오 작성 */
+      .scen-split { @apply grid gap-4; grid-template-columns:1fr 1fr; height:calc(100vh - 220px); min-height:460px; }
+      @media (max-width:980px){ .scen-split { grid-template-columns:1fr; height:auto; } }
+      .scen-split .card { @apply flex flex-col overflow-hidden; }
+      .scen-split .card-body { @apply flex flex-col overflow-hidden flex-1; }
+      .scen-preview #preview { @apply flex-1 overflow-auto pr-1.5; }
+      .chat { @apply flex-1 overflow-auto flex flex-col gap-2.5 px-0.5 py-1; }
+      .msg { @apply max-w-[88%] px-3 py-2.5 rounded-xl whitespace-pre-wrap break-words text-[13.5px]; }
+      .msg.user { @apply self-end bg-primary-500 text-white rounded-br-sm; }
+      .msg.assistant { @apply self-start bg-slate-100 text-slate-700 rounded-bl-sm; }
+      .msg.thinking { @apply self-start text-slate-500 italic; }
+      .chat-input { @apply flex gap-2 items-end mt-2.5 border-t border-slate-200 pt-2.5; }
+      .chat-input textarea { @apply resize-none; }
+      .scroll-thin::-webkit-scrollbar{width:8px;height:8px}
+      .scroll-thin::-webkit-scrollbar-thumb{background:rgb(226 232 240);border-radius:999px}
+    }
+  </style>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="font-sans">
+  <div id="app"></div>
+
+  <!-- Vue 3 (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <!-- ViewLogic Router 1.4.0 -->
+  <script src="https://cdn.jsdelivr.net/npm/viewlogic@1.4.0/dist/viewlogic-router.min.js"></script>
+  <!-- Markdown (통합 리포트·시나리오 미리보기 렌더용) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <script>
+    // Lucide 아이콘 렌더 — 라우트 전환마다 새 마크업의 [data-lucide] 를 아이콘으로 치환
+    window.qaIcons = function () {
+      if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.75 } })
+    }
+    // 뷰 렌더 후 아이콘 적용 (ViewLogic 은 DOM 교체형 → 약간의 지연 후 재생성)
+    window.addEventListener('hashchange', () => setTimeout(window.qaIcons, 60))
+    document.addEventListener('DOMContentLoaded', () => setTimeout(window.qaIcons, 120))
+
+    // 모바일 사이드바 드로어 토글 — 레이아웃 햄버거 버튼/백드롭에서 native onclick 으로 호출.
+    // 데스크톱(≥768px)에서는 CSS 가 사이드바를 항상 표시하므로 영향 없음.
+    window.qaSidebar = function (open) {
+      const el = document.getElementById('qaSidebar')
+      const bd = document.getElementById('qaSidebarBackdrop')
+      if (!el || !bd) return
+      const show = open === undefined ? !el.classList.contains('open') : open
+      el.classList.toggle('open', show)
+      bd.classList.toggle('show', show)
+    }
+    window.qaToggleSidebar = function () { window.qaSidebar() }
+    // 라우트 전환 시 드로어 자동 닫기 (모바일에서 메뉴 선택 후 자연스럽게 닫힘)
+    window.addEventListener('hashchange', () => window.qaSidebar(false))
+
+    // 로그아웃 — 레이아웃 사이드바에서 native onclick 으로 호출 (쿠키 세션 해제)
+    window.qaLogout = async function () {
+      try { await fetch('/api/logout', { method: 'POST' }) } catch (e) {}
+      window.qaRole = null
+      location.hash = '#/login'
+      location.reload()
+    }
+
+    // 역할(super|manager) — 최고관리자 전용 메뉴([data-super-only]) 표시 제어.
+    // <html data-role> 속성 하나만 세팅하면 CSS 가 표시를 결정한다. <html> 은 ViewLogic 의
+    // DOM 교체 대상이 아니라 라우트 전환·사이드바 재렌더와 무관하게 한 번 설정으로 유지된다.
+    window.qaRole = null
+    window.qaApplyRole = async function () {
+      if (window.qaRole === null) {
+        try { const r = await fetch('/api/env'); if (r.ok) window.qaRole = (await r.json()).role || 'manager'; else return }
+        catch (e) { return }
+      }
+      document.documentElement.setAttribute('data-role', window.qaRole)
+    }
+    window.addEventListener('hashchange', window.qaApplyRole)
+    document.addEventListener('DOMContentLoaded', window.qaApplyRole)
+    window.qaApplyRole()
+
+    // 공통 클라이언트 헬퍼 (HTML escape · 라벨 매핑)
+    window.qa = {
+      esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) },
+      statusLabel(s) { return ({ pending: '대기', running: '실행중', synthesizing: '통합중', done: '완료', error: '오류', cancelled: '중단됨' })[s] || s },
+      isActive(s) { return ['pending', 'running', 'synthesizing'].includes(s) },
+      recoClass(rc) {
+        rc = rc || ''
+        return rc.includes('가능') ? 'reco-green' : rc.includes('조건부') ? 'reco-yellow' : rc.includes('보류') ? 'reco-red' : ''
+      },
+      // 출시권고(🟢/🟡/🔴)를 사람이 바로 알아듣는 한 문장으로 풀어 준다.
+      recoLabel(rc) {
+        rc = rc || ''
+        if (rc.includes('가능')) return '🟢 지금 출시해도 괜찮아요'
+        if (rc.includes('조건부')) return '🟡 몇 가지만 고치면 출시할 수 있어요'
+        if (rc.includes('보류')) return '🔴 아직 출시하면 안 돼요'
+        return rc || '아직 판단 전이에요'
+      },
+      sevClass(s) { return 'sev-' + (s || 'Nitpick') },
+    }
+
+    const PROTECTED = [
+      'home', 'personas', 'projects', 'project-overview', 'project-personas',
+      'project-runs', 'run-detail', 'project-qa', 'qa-issue-detail', 'project-settings', 'settings', 'managers',
+    ]
+
+    window.router = new ViewLogicRouter({
+      environment: 'development',
+      mode: 'hash',
+      logLevel: 'warn',
+      authEnabled: true,
+      loginRoute: 'login',
+      publicRoutes: ['login'],
+      protectedRoutes: PROTECTED,
+      redirectAfterLogin: 'home',
+      checkAuthFunction: async (route) => {
+        try { await route.$api.get('/api/auth/check'); return true } catch (e) { return false }
+      },
+    })
+  </script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<div class="crumb"><a href="#/projects">프로젝트</a> › {{ project.name }}</div>
+<div class="ptabs">
+  <a class="active" :href="'#/project-overview?id=' + id">개요</a>
+  <a :href="'#/project-personas?id=' + id">페르소나</a>
+  <a :href="'#/project-runs?id=' + id">시나리오·실행</a>
+  <a :href="'#/project-qa?id=' + id">QA 리스트</a>
+  <a :href="'#/project-settings?id=' + id">설정</a>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <div class="small muted">{{ project.base_url }} · {{ project.platform || 'web' }}</div>
+  </div>
+  <a class="btn btn-primary btn-sm" :href="'#/project-runs?id=' + id"><i data-lucide="play"></i> QA 실행</a>
+</div>
+
+<div v-if="stats.latest && stats.latest.summary" class="ai-banner mb-3">
+  <span class="tag">AI 요약</span>
+  <div>
+    <div class="font-bold mb-1">최근 실행 결과: {{ recoLabel(stats.latest.launchRecommendation) }}</div>
+    <div class="opacity-90 whitespace-pre-line">{{ stats.latest.summary }}</div>
+    <a v-if="stats.latest.p1Count" :href="'#/project-qa?id=' + id + '&sev=P1'"
+       class="inline-flex items-center gap-1 mt-2 font-medium underline underline-offset-2 decoration-white/40 hover:decoration-white">
+      🔴 P1 {{ stats.latest.p1Count }}건 QA 리스트에서 보기 →
+    </a>
+    <div class="opacity-70 small mt-2 pt-2 border-t border-white/15">
+      P1 = 꼭 고쳐야 할 심각한 문제 · P2 = 불편하지만 쓸 수는 있는 문제 · P3 = 사소한 문제
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  <div class="card stat"><div class="card-body"><div class="num">{{ stats.runs }}</div><div class="lbl">총 실행</div></div></div>
+  <div class="card stat"><div class="card-body"><div class="num text-red-600">{{ stats.openIssues }}</div><div class="lbl">미해결 이슈</div></div></div>
+  <div class="card stat"><div class="card-body"><div class="num text-red-600">{{ sev('Blocker') }}</div><div class="lbl">Blocker 이슈</div></div></div>
+  <div class="card stat"><div class="card-body"><div class="num text-amber-600">{{ sev('Major') }}</div><div class="lbl">Major 이슈</div></div></div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-3 mt-3">
+  <div class="card accent"><div class="card-body">
+    <div class="card-h">세그먼트별 태스크 완료율</div>
+    <div v-if="!segByLit.length" class="empty small">실행 데이터가 쌓이면 표시됩니다.</div>
+    <template v-else>
+      <div v-for="gp in segByLit" :key="gp.seg" class="mb-2">
+        <div class="small flex justify-between">
+          <span>디지털 친숙도 <strong>{{ gp.seg }}</strong> <span class="muted">({{ gp.personas }}명)</span></span>
+          <span>{{ rate(gp) }}%</span>
+        </div>
+        <div class="bar"><i :style="{ width: rate(gp) + '%' }"></i></div>
+      </div>
+      <div class="small muted mt-2">완료율이 낮은 세그먼트일수록 위에 표시됩니다 — 특정 집단 배제 신호.</div>
+    </template>
+  </div></div>
+
+  <div class="card"><div class="card-body">
+    <div class="card-h">구분 코드별 이슈</div>
+    <div v-if="!stats.issuesByCat.length" class="empty small">아직 이슈가 없습니다.</div>
+    <template v-else>
+      <div class="overflow-x-auto -mx-5">
+        <table class="tbl">
+          <tbody>
+            <tr v-for="c in stats.issuesByCat" :key="c.category">
+              <td><span class="dot" :class="'dot-' + c.category"></span>{{ c.category }}</td>
+              <td class="text-right"><strong>{{ c.c }}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <a class="btn btn-outline btn-sm mt-3" :href="'#/project-qa?id=' + id">QA 리스트에서 배정·관리 <i data-lucide="arrow-right"></i></a>
+    </template>
+  </div></div>
+</div>

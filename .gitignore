@@ -1,0 +1,15 @@
+# 실제 자격증명·세션을 포함하므로 커밋 금지
+config/target.json
+config/.auth/
+reports/runs/
+
+# 의존성 / 빌드 산출물
+node_modules/
+
+# 로그·임시 산출물
+*.log
+.playwright-mcp/
+
+# OS
+.DS_Store
+Thumbs.db

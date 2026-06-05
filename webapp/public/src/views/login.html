@@ -1,0 +1,21 @@
+<div class="min-h-screen grid place-items-center px-4" style="background:radial-gradient(1200px 600px at 50% -10%, #eff6ff, #f8fafc)">
+  <div class="card shadow-2xl w-[360px]">
+    <div class="card-body p-7 text-center">
+      <span class="inline-flex items-center justify-center size-11 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white text-base font-extrabold shadow-sm shadow-primary-500/30">QA</span>
+      <h1 class="text-lg font-bold tracking-tight mt-3 mb-1">QA 에이전트팀</h1>
+      <p class="muted small mb-5">사내 QA 에이전트 콘솔 — 비밀번호를 입력하세요</p>
+      <form @submit.prevent="login" class="space-y-3">
+        <div class="relative">
+          <input :type="showPw ? 'text' : 'password'" class="input text-center pr-10" v-model="password" placeholder="비밀번호" autocomplete="current-password" />
+          <button type="button" @click="togglePw"
+                  class="absolute inset-y-0 right-0 inline-flex items-center justify-center w-10 text-slate-400 hover:text-slate-600"
+                  :aria-label="showPw ? '비밀번호 숨기기' : '비밀번호 표시'" :title="showPw ? '숨기기' : '표시'">
+            <i :data-lucide="showPw ? 'eye-off' : 'eye'" class="size-4"></i>
+          </button>
+        </div>
+        <div v-if="error" class="text-red-600 small">{{ error }}</div>
+        <button class="btn btn-primary btn-lg w-full" type="submit" :disabled="busy">{{ busy ? '확인 중…' : '로그인' }}</button>
+      </form>
+    </div>
+  </div>
+</div>

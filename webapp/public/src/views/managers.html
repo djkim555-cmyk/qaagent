@@ -1,0 +1,141 @@
+<div class="page-head">
+  <h1>접속자 관리</h1>
+  <button class="btn btn-primary btn-lg" @click="openAdd"><i data-lucide="user-plus"></i> 관리자 추가</button>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="card-h">프로젝트 관리자 ({{ managers.length }})</div>
+    <div v-if="loaded && !managers.length" class="empty">
+      <div class="mb-3">등록된 프로젝트 관리자가 없습니다.</div>
+      <button class="btn btn-primary" @click="openAdd"><i data-lucide="user-plus"></i> 첫 관리자 추가</button>
+    </div>
+    <div v-else-if="managers.length" class="overflow-x-auto -mx-5">
+      <table class="tbl">
+        <thead><tr><th>관리자명</th><th>연락처</th><th>담당 프로젝트</th><th></th></tr></thead>
+        <tbody>
+          <tr v-for="m in managers" :key="m.id">
+            <td class="font-medium text-slate-900">{{ m.name }}</td>
+            <td class="small muted">{{ m.contact || '—' }}</td>
+            <td>
+              <button class="btn btn-outline btn-sm" @click="openAssign(m)">
+                <i data-lucide="folder-cog"></i>
+                <span v-if="m.project_count">담당 {{ m.project_count }}개 · 변경</span>
+                <span v-else>프로젝트 지정</span>
+              </button>
+            </td>
+            <td class="text-right whitespace-nowrap">
+              <button class="btn btn-outline btn-sm" @click="resetPw(m)"><i data-lucide="key-round"></i> 비밀번호 변경</button>
+              <button class="btn btn-danger-outline btn-sm ml-1.5" @click="openDelete(m)"><i data-lucide="trash-2"></i> 삭제</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted mt-3">관리자를 삭제하면 담당 프로젝트는 미배정 상태가 되며 최고관리자에게만 보입니다.</p>
+  </div>
+</div>
+
+<!-- 프로젝트 관리자 추가 팝업 -->
+<div v-if="showAdd" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeAdd">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-lg bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">프로젝트 관리자 추가</h2>
+      <button class="icon-btn" @click="closeAdd" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <form @submit.prevent="add">
+      <div class="px-5 py-4 max-h-[70vh] overflow-y-auto">
+        <p class="small muted mb-3">관리자명(또는 프로젝트명)과 비밀번호를 부여합니다. 관리자는 이 비밀번호로 로그인해 자신에게 지정된 프로젝트만 보고 만들 수 있습니다.</p>
+        <label class="label">관리자명 / 프로젝트명</label>
+        <input class="input mb-2" v-model="form.name" placeholder="예: 마이샵 운영팀" />
+        <label class="label">이메일 / 슬랙 연락처 <span class="text-slate-400 font-normal">(선택)</span></label>
+        <input class="input mb-2" type="text" v-model="form.contact" placeholder="예: ops@example.com 또는 @slack-id" autocomplete="off" />
+        <label class="label">로그인 비밀번호</label>
+        <input class="input" type="text" v-model="form.password" placeholder="4자 이상 · 전체 고유" autocomplete="off" />
+        <p class="small muted mt-1.5">비밀번호가 곧 로그인 식별자입니다. 다른 관리자·최고관리자와 중복될 수 없습니다.</p>
+        <div v-if="err" class="text-red-600 small mt-3">{{ err }}</div>
+      </div>
+      <div class="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+        <button class="btn btn-outline" type="button" @click="closeAdd">취소</button>
+        <button class="btn btn-primary" type="submit" :disabled="saving"><i data-lucide="user-plus"></i> 관리자 추가</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 담당 프로젝트 지정 팝업 (복수 선택) -->
+<div v-if="showAssign" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeAssign">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-lg bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">담당 프로젝트 지정 — {{ assignFor && assignFor.name }}</h2>
+      <button class="icon-btn" @click="closeAssign" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <div class="px-5 py-4 max-h-[70vh] overflow-y-auto">
+      <p class="small muted mb-3">이 관리자가 담당할 프로젝트를 선택하세요. 다른 관리자가 담당 중인 프로젝트를 선택하면 이 관리자로 재지정됩니다.</p>
+      <div v-if="!projects.length" class="empty">등록된 프로젝트가 없습니다.</div>
+      <div v-else class="space-y-1.5">
+        <label v-for="p in projects" :key="p.id"
+               class="flex items-center gap-3 px-3 py-2 rounded-md ring-1 ring-inset ring-slate-200 hover:bg-slate-50 cursor-pointer">
+          <input type="checkbox" :value="p.id" v-model="assignSel"
+                 class="size-4 rounded border-slate-300 text-primary-500 focus:ring-primary-500" />
+          <span class="flex-1 min-w-0">
+            <span class="font-medium text-slate-900">{{ p.name }}</span>
+            <span class="block small muted truncate">{{ p.base_url }}</span>
+          </span>
+          <span v-if="assignFor && p.manager_id === assignFor.id" class="badge"><i data-lucide="check" class="size-3"></i> 현재 담당</span>
+          <span v-else-if="p.manager_id" class="badge"><i data-lucide="user" class="size-3"></i> {{ p.manager_name }}</span>
+          <span v-else class="badge text-slate-400">미배정</span>
+        </label>
+      </div>
+      <div v-if="assignErr" class="text-red-600 small mt-3">{{ assignErr }}</div>
+    </div>
+    <div class="flex items-center justify-between gap-2 px-5 py-4 border-t border-slate-100">
+      <span class="small muted">{{ assignSel.length }}개 선택됨</span>
+      <span class="flex gap-2">
+        <button class="btn btn-outline" type="button" @click="closeAssign">취소</button>
+        <button class="btn btn-primary" type="button" :disabled="assignSaving" @click="saveAssign"><i data-lucide="save"></i> 저장</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- 관리자 삭제 — 이중 컨펌 팝업 -->
+<div v-if="showDelete" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDelete">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-md bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">
+        <span v-if="delStage === 1">관리자 삭제</span>
+        <span v-else>정말 삭제할까요?</span>
+      </h2>
+      <button class="icon-btn" @click="closeDelete" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <div class="px-5 py-4">
+      <template v-if="delStage === 1">
+        <p class="text-sm text-slate-700 m-0">
+          <span class="font-semibold text-slate-900">{{ delTarget && delTarget.name }}</span> 관리자를 삭제하시겠어요?
+        </p>
+        <p class="small muted mt-2">담당 프로젝트 {{ (delTarget && delTarget.project_count) || 0 }}개는 미배정 상태가 되어 최고관리자에게만 보입니다.</p>
+      </template>
+      <template v-else>
+        <div class="flex items-start gap-2.5 rounded-md bg-red-50 ring-1 ring-inset ring-red-500/20 px-3 py-2.5">
+          <i data-lucide="triangle-alert" class="size-4 text-red-600 mt-0.5"></i>
+          <p class="text-sm text-red-700 m-0">이 작업은 되돌릴 수 없습니다. <span class="font-semibold">{{ delTarget && delTarget.name }}</span> 을(를) 삭제하려면 한 번 더 확인해 주세요.</p>
+        </div>
+      </template>
+      <div v-if="delErr" class="text-red-600 small mt-3">{{ delErr }}</div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+      <template v-if="delStage === 1">
+        <button class="btn btn-outline" type="button" @click="closeDelete">취소</button>
+        <button class="btn btn-danger-outline" type="button" @click="delStage = 2"><i data-lucide="trash-2"></i> 삭제 진행</button>
+      </template>
+      <template v-else>
+        <button class="btn btn-outline" type="button" @click="delStage = 1">뒤로</button>
+        <button class="btn btn-danger" type="button" :disabled="delSaving" @click="confirmDelete"><i data-lucide="trash-2"></i> 삭제 확정</button>
+      </template>
+    </div>
+  </div>
+</div>

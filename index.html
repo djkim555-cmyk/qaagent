@@ -1,0 +1,2083 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>구글 파트너 정산</title>
+    <meta name="description" content="시냅스엠의 구글 파트너와의 정산 서비스를 효율적으로 만들기 위한 에이전트">
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+
+    <!-- 폰트: DM Sans + DM Mono + Pretendard(한글 폴백) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
+
+    <!-- Tailwind CSS (CDN) + forms 플러그인 -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"DM Sans"', '"Pretendard Variable"', 'Pretendard', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
+                    },
+                    colors: {
+                        primary: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#8ec5ff',400:'#51a2ff',500:'#2b7fff',600:'#155dfc',700:'#1447e6',800:'#1e40af',900:'#1e3a8a', DEFAULT:'#2b7fff' },
+                    },
+                },
+            },
+        };
+    </script>
+
+    <!-- 공용 디자인 시스템 레이어 -->
+    <style type="text/tailwindcss">
+        @layer base {
+            html { scroll-behavior: smooth; }
+            body { font-family:"DM Sans","Pretendard Variable",Pretendard,system-ui,sans-serif; letter-spacing:-0.01em; @apply bg-slate-50 text-slate-900; -webkit-font-smoothing:antialiased; }
+            [data-lucide]{ width:1em; height:1em; }
+            [v-cloak]{ display:none; }
+        }
+        @layer components {
+            /* ── 카드 ── */
+            .card { @apply bg-white rounded-lg ring-1 ring-slate-200; }
+            .card-body { @apply p-5; }
+            .section-card { @apply bg-white rounded-lg ring-1 ring-slate-200 p-5; }
+
+            /* ── 버튼 ── */
+            .btn { @apply inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium transition-colors cursor-pointer select-none whitespace-nowrap; }
+            .btn-sm { @apply h-7 px-2.5 text-xs gap-1; }
+            .btn-lg { @apply h-9 px-3.5; }
+            .btn-primary { @apply bg-primary-500 text-white hover:bg-primary-600; }
+            .btn-outline { @apply bg-white ring-1 ring-inset ring-slate-300 text-slate-700 hover:bg-slate-50; }
+            .btn-soft { @apply bg-primary-50 text-primary-700 hover:bg-primary-100; }
+            .btn-ghost { @apply text-slate-700 hover:bg-slate-100; }
+            .btn-danger { @apply bg-red-500 text-white hover:bg-red-600; }
+            .btn-danger-outline { @apply bg-white ring-1 ring-inset ring-red-300 text-red-600 hover:bg-red-50; }
+            .btn-success { @apply bg-emerald-600 text-white hover:bg-emerald-700; }
+            .btn-success-outline { @apply bg-white ring-1 ring-inset ring-emerald-300 text-emerald-700 hover:bg-emerald-50; }
+            .btn-link { @apply inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 hover:underline cursor-pointer bg-transparent; }
+            .btn:disabled, .btn.disabled { @apply opacity-50 pointer-events-none; }
+            .icon-btn { @apply inline-flex items-center justify-center size-8 rounded-md text-slate-500 hover:bg-slate-100; }
+
+            /* ── 폼 컨트롤 ── */
+            .label { @apply block text-[13px] font-medium text-slate-700 mb-1.5; }
+            .input, .select, .textarea { @apply w-full h-8 px-3 text-sm bg-white rounded-md ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 border-0; }
+            .input-sm, .select-sm { @apply h-7 px-2.5 text-xs; }
+            .textarea { @apply h-auto py-2 leading-relaxed; }
+            .input:disabled, .select:disabled, .textarea:disabled { @apply ring-slate-200 bg-slate-50 text-slate-400; }
+            .check { @apply size-4 rounded ring-1 ring-inset ring-slate-300 text-primary-500 focus:ring-primary-500 border-0; }
+
+            /* ── 배지 ── */
+            .badge { @apply inline-flex items-center gap-1 h-5 px-2 rounded-md text-xs font-medium ring-1 ring-inset ring-slate-200 bg-white text-slate-600 whitespace-nowrap; }
+            .badge-secondary { @apply bg-slate-100 text-slate-600 ring-slate-200; }
+            .badge-primary { @apply bg-primary-50 text-primary-700 ring-primary-500/20; }
+
+            /* ── 테이블 ── */
+            table.tbl { @apply w-full text-sm; }
+            table.tbl thead { @apply bg-slate-50/60; }
+            table.tbl th { @apply text-left text-xs font-medium uppercase tracking-wider text-slate-500 px-3 py-2.5 whitespace-nowrap; }
+            table.tbl td { @apply px-3 py-2.5 align-middle border-t border-slate-100; }
+            table.tbl tbody tr { @apply transition-colors hover:bg-slate-50/60; }
+            .num-tab { font-variant-numeric:tabular-nums; }
+            .mono { font-family:"DM Mono",monospace; font-variant-numeric:tabular-nums; }
+
+            /* ── 알림(소프트 박스) ── */
+            .note { @apply rounded-lg p-3.5 text-sm flex gap-2.5 ring-1 ring-inset; }
+            .note-info { @apply bg-sky-50 ring-sky-200 text-sky-800; }
+            .note-primary { @apply bg-primary-50 ring-primary-200 text-primary-800; }
+            .note-success { @apply bg-emerald-50 ring-emerald-200 text-emerald-800; }
+            .note-warning { @apply bg-amber-50 ring-amber-200 text-amber-800; }
+            .note-danger { @apply bg-red-50 ring-red-200 text-red-700; }
+
+            /* ── 모달 ── */
+            .modal-backdrop { @apply fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4; }
+            .modal-dialog { @apply bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden; }
+            .modal-header { @apply flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200; }
+            .modal-header h5 { @apply text-base font-bold text-slate-900 m-0 flex items-center gap-1.5; }
+            .modal-body { @apply px-5 py-4 overflow-auto; }
+            .modal-footer { @apply flex items-center justify-end gap-2 px-5 py-3 bg-slate-50/70 border-t border-slate-200; }
+            .modal-close { @apply inline-flex items-center justify-center size-7 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer; }
+
+            /* ── 탭(pill) ── */
+            .ptabs { @apply inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg; }
+            .ptabs .ptab { @apply px-3 h-8 inline-flex items-center gap-1.5 rounded-md text-[13px] font-medium text-slate-500 cursor-pointer hover:text-slate-900 bg-transparent; }
+            .ptabs .ptab.active { @apply bg-white text-slate-900 font-semibold shadow-sm; }
+
+            /* ── 마감/상태 칩 ── */
+            .closed-chip { @apply inline-flex items-center gap-1 h-5 px-2 rounded-md text-xs font-semibold bg-slate-700 text-white; }
+            .step-badge { @apply inline-flex items-center justify-center min-w-[3rem] h-6 px-2 rounded-md text-xs font-medium; }
+            .step-closed { @apply bg-slate-700 text-white; }
+            .step-open { @apply bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200; }
+            .step-none { @apply bg-slate-100 text-slate-400 ring-1 ring-inset ring-slate-200; }
+            .st-none { @apply text-slate-400; } .st-settled { @apply text-emerald-600 font-medium; } .st-closed { @apply text-slate-700 font-semibold; }
+
+            /* ── 토글 스위치 ── */
+            .switch { @apply inline-flex items-center gap-2 cursor-pointer select-none; }
+            .switch input { @apply size-4 rounded ring-1 ring-inset ring-slate-300 text-primary-500 focus:ring-primary-500 border-0; }
+
+            /* ── 페이지네이션 ── */
+            .pg { @apply inline-flex items-center gap-1; }
+            .pg button, .pg span.pg-cur { @apply inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-md text-sm ring-1 ring-inset ring-slate-200 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer; }
+            .pg span.pg-cur { @apply bg-primary-50 text-primary-700 ring-primary-200 font-medium cursor-default; }
+            .pg button:disabled { @apply opacity-40 pointer-events-none; }
+
+            /* ── 파트너 타일 ── */
+            .partner-tile-grid { @apply grid gap-3; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }
+            .partner-tile { @apply flex flex-col gap-1 items-start text-left p-4 rounded-lg bg-white ring-1 ring-slate-200 hover:ring-primary-300 hover:bg-primary-50/40 transition-colors cursor-pointer; }
+            .partner-tile-name { @apply text-base font-semibold text-slate-900; }
+            .partner-tile-count { @apply text-2xl font-bold text-primary-700 tabular-nums; }
+            .partner-tile-count small { @apply text-sm font-normal text-slate-500; }
+            .partner-tile-cta { @apply mt-1 text-[13px] text-primary-600 inline-flex items-center gap-1; }
+
+            /* ── 2열 레이아웃 ── */
+            .content-2col { @apply grid gap-4; grid-template-columns:minmax(0,1fr) 300px; }
+            @media (max-width:900px){ .content-2col { grid-template-columns:1fr; } }
+
+            /* ── 결과 카드(우측 강조) ── */
+            .result-card { @apply rounded-lg p-4 bg-primary-50 ring-1 ring-inset ring-primary-200; }
+            .result-label { @apply text-[13px] font-medium text-primary-700 mb-1; }
+            .result-value { @apply text-3xl font-bold text-primary-700 tabular-nums leading-none mb-2; }
+            .result-currency { @apply text-lg font-semibold; }
+
+            /* ── 정산 데이터 테이블 ── */
+            table.dtbl { @apply w-full text-sm border-separate; border-spacing:0; }
+            table.dtbl thead th { @apply text-xs font-semibold text-slate-600 px-3 py-2 bg-slate-50 border-b border-slate-200 align-middle; }
+            table.dtbl tbody td { @apply px-3 py-2.5 border-b border-slate-100 align-middle tabular-nums; }
+            table.dtbl tbody tr:hover { @apply bg-slate-50/50; }
+            .dtbl .total-row td { @apply bg-slate-50 font-semibold border-t border-slate-300; }
+            .dtbl .synapse-row td { @apply bg-primary-50/60 font-semibold; }
+            .cell-base { @apply bg-slate-50/40; }
+            .cell-ratio { @apply text-slate-500; }
+            .cell-synapse { @apply bg-primary-50/40; }
+            .cell-muted { @apply text-slate-400; }
+
+            /* ── 리포트 ── */
+            .report-kpi-grid { @apply grid gap-3; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+            .report-kpi-card { @apply flex flex-col gap-1 p-4 rounded-lg bg-white ring-1 ring-slate-200; }
+            .report-kpi-card.is-primary { @apply bg-primary-50 ring-primary-200; }
+            .report-kpi-label { @apply text-[13px] text-slate-500 inline-flex items-center gap-1; }
+            .report-kpi-value { @apply text-2xl font-bold text-slate-900 tabular-nums; }
+            .report-kpi-card.is-primary .report-kpi-value { @apply text-primary-700; }
+            .report-kpi-value small { @apply text-sm font-normal text-slate-500 ml-0.5; }
+            .report-kpi-sub { @apply text-xs text-slate-500; }
+            .report-2col { @apply grid gap-4; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
+            .report-block { @apply bg-white rounded-lg ring-1 ring-slate-200 p-4; }
+            .report-block-title { @apply text-sm font-bold text-slate-900 mb-3 inline-flex items-center gap-1; }
+            .report-compare-row, .report-flow-row { @apply flex items-center gap-3 py-1.5 text-sm; }
+            .report-compare-label, .report-flow-label { @apply w-32 shrink-0 text-slate-600; }
+            .report-compare-track, .report-flow-track { @apply flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden; }
+            .report-compare-fill, .report-flow-fill { @apply h-full rounded-full bg-primary-500; }
+            .report-flow-fill.is-base { @apply bg-primary-400; } .report-flow-fill.is-minus { @apply bg-red-400; } .report-flow-fill.is-net { @apply bg-emerald-500; }
+            .report-compare-val, .report-flow-val { @apply w-28 shrink-0 text-right tabular-nums font-medium; }
+            .report-flow-row.is-result { @apply border-t border-slate-200 mt-1 pt-2.5; }
+            .report-bar-col { @apply min-w-[120px]; }
+            .report-bar { @apply h-2 bg-slate-100 rounded-full overflow-hidden inline-block w-20 align-middle; }
+            .report-bar-fill { @apply block h-full bg-primary-500; }
+            .report-bar-pct { @apply ml-2 text-xs text-slate-500 tabular-nums; }
+            .report-partner-grid { @apply grid gap-3; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
+            .report-partner-card { @apply rounded-lg ring-1 ring-slate-200 overflow-hidden; }
+            .report-partner-name { @apply flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 font-semibold text-slate-900 border-b border-slate-200; }
+            .report-partner-table { @apply w-full text-sm; }
+            .report-partner-table th { @apply text-left font-medium text-slate-600 px-3 py-2 align-middle border-b border-slate-100; }
+            .report-partner-table td { @apply px-3 py-2 align-middle border-b border-slate-100 tabular-nums; }
+            .report-partner-sub { @apply text-xs text-slate-500; }
+            .report-partner-final th, .report-partner-final td { @apply bg-primary-50/60 font-semibold; }
+            .report-partner-op { @apply flex items-center justify-between gap-2 text-xs py-0.5; }
+            .report-partner-op-fee { @apply text-emerald-700 font-medium; }
+
+            /* ── 운영대행 카드 ── */
+            .operating-card { @apply rounded-lg ring-1 ring-slate-200 overflow-hidden; }
+            .operating-head { @apply flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 text-sm font-medium border-b border-slate-200; }
+            .operating-total strong { @apply text-slate-900; }
+
+            /* ── 업로드 드롭 카드 ── */
+            .upload-grid { @apply grid gap-3; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); }
+            .upload-card { @apply border-2 border-dashed border-slate-300 rounded-lg p-4 bg-slate-50/40; }
+            .upload-card.is-disabled { @apply opacity-50; }
+            .upload-head { @apply flex items-center gap-2 font-medium text-slate-700 mb-1; }
+
+            /* ── 필터 드롭다운(teleport) ── */
+            .filter-menu { @apply fixed z-[60] w-64 bg-white rounded-lg shadow-2xl ring-1 ring-slate-200 p-2; }
+            .filter-item { @apply flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-slate-50 cursor-pointer; }
+            .filter-item input { @apply size-4 rounded ring-1 ring-inset ring-slate-300 text-primary-500 focus:ring-primary-500 border-0; }
+            .filter-count { @apply ml-auto text-xs text-slate-400 tabular-nums; }
+
+            /* ── Bootstrap 입력 그룹 대체(% 접미) ── */
+            .ig { @apply inline-flex items-stretch rounded-md ring-1 ring-inset ring-slate-300 overflow-hidden bg-white focus-within:ring-2 focus-within:ring-primary-500; }
+            .ig > input { @apply h-7 px-2.5 text-sm text-right border-0 ring-0 focus:ring-0 bg-transparent min-w-0; }
+            .ig > .ig-text { @apply inline-flex items-center px-2 text-sm text-slate-500 bg-slate-50 border-l border-slate-200; }
+
+            /* ── Bootstrap JS 호환(드롭다운/콜랩스) ── */
+            .dropdown-menu { @apply hidden absolute z-40 mt-1 min-w-[12rem] bg-white rounded-lg shadow-xl ring-1 ring-slate-200 p-2; }
+            .dropdown-menu.show { @apply block; }
+            .dropdown-menu-end { @apply right-0; }
+            .collapse { display:none; } .collapse.show { display:block; } .collapse.collapsing { display:block; }
+            @media (min-width:1024px){ .navbar-collapse { display:flex !important; } }
+        }
+    </style>
+
+    <!-- Lucide 아이콘 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        // Vue 재렌더 후 [data-lucide] 를 아이콘으로 치환 (디바운스 MutationObserver)
+        (function () {
+            var t = null;
+            function render() { if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.75 } }); }
+            function schedule() { clearTimeout(t); t = setTimeout(render, 60); }
+            document.addEventListener('DOMContentLoaded', function () {
+                render();
+                var app = document.getElementById('app');
+                if (app && window.MutationObserver) {
+                    new MutationObserver(schedule).observe(app, { childList: true, subtree: true });
+                }
+            });
+        })();
+    </script>
+</head>
+<body>
+    <div id="app">
+        <section v-if="isLoginPage" class="min-h-screen flex items-center justify-center p-4">
+            <div class="card w-full max-w-sm shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-6">
+                        <div class="flex items-center justify-center gap-3 mb-3">
+                            <span class="inline-flex items-center justify-center size-12 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-2xl">💰</span>
+                            <div class="text-left">
+                                <h1 class="text-xl font-bold text-slate-900 mb-0.5">구글 파트너 정산</h1>
+                                <p class="text-sm text-slate-500 m-0">비밀번호로 로그인하세요.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form @submit.prevent="login">
+                        <div class="mb-3">
+                            <label class="label">비밀번호</label>
+                            <input type="password" class="input" v-model="password" autocomplete="current-password" placeholder="비밀번호를 입력하세요" />
+                        </div>
+                        <div v-if="error" class="note note-danger py-2 mb-3">{{ error }}</div>
+                        <button type="submit" class="btn btn-primary w-full">로그인</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <div v-else class="min-h-screen">
+            <nav class="bg-white ring-1 ring-slate-200 sticky top-0 z-30">
+                <div class="max-w-[1400px] mx-auto px-3 lg:px-6 flex items-center gap-4 h-14">
+                    <a class="flex items-center gap-2 no-underline shrink-0" href="#" @click.prevent="navigate('dashboard')">
+                        <span class="inline-flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-primary-500 to-primary-700 text-white"><i data-lucide="piggy-bank"></i></span>
+                        <span class="font-bold text-slate-900 whitespace-nowrap">구글 파트너 정산</span>
+                    </a>
+                    <button class="lg:hidden ml-auto icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#gnbMenu" aria-controls="gnbMenu" aria-expanded="false" aria-label="Toggle navigation">
+                        <i data-lucide="menu"></i>
+                    </button>
+
+                    <div class="collapse navbar-collapse lg:flex flex-1 items-center gap-1 max-lg:absolute max-lg:top-14 max-lg:left-0 max-lg:right-0 max-lg:bg-white max-lg:ring-1 max-lg:ring-slate-200 max-lg:flex-col max-lg:items-stretch max-lg:p-2 max-lg:z-30" id="gnbMenu">
+                        <ul class="flex flex-wrap items-center gap-1 list-none m-0 p-0 max-lg:flex-col max-lg:items-stretch max-lg:w-full">
+                            <li v-for="item in navItems" :key="item.id">
+                                <a class="block px-3 h-8 leading-8 rounded-md text-[13px] font-medium no-underline transition-colors cursor-pointer" :class="activePage === item.id ? 'bg-primary-50 text-primary-700 font-semibold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'" href="#" @click.prevent="navigate(item.id)">{{ item.label }}</a>
+                            </li>
+                        </ul>
+                        <div class="lg:ml-auto max-lg:mt-1">
+                            <button type="button" class="btn btn-outline btn-sm w-full lg:w-auto" @click="logout">
+                                <i data-lucide="log-out"></i>
+                                <span>로그아웃</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <main class="py-6">
+                <div class="max-w-[1400px] mx-auto px-3 lg:px-6">
+                    <div class="mb-5">
+                        <h2 class="text-2xl font-bold tracking-tight text-slate-900 mb-1">
+                            <span v-if="activePage === 'dashboard'">대시보드</span>
+                            <span v-else-if="activePage === 'partner-assignment'">파트너 할당 기준</span>
+                            <span v-else-if="activePage === 'partner-ratio'">파트너 정산 비율</span>
+                            <span v-else-if="activePage === 'serving-fee'">월별 서빙피 단가</span>
+                            <span v-else-if="activePage === 'monthly-settlement-base'">월별 정산 기초 자료</span>
+                            <span v-else-if="activePage === 'exchange-rate'">실정산금액 및 기준환율</span>
+                            <span v-else-if="activePage === 'monthly-settlement'">월별 정산</span>
+                            <span v-else-if="activePage === 'monthly-report'">월별 리포트</span>
+                        </h2>
+                    </div>
+
+                    <section v-if="activePage === 'dashboard'" class="section-card mb-4">
+                        <h2 class="text-lg font-bold text-slate-900">빠른 현황</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                            <div class="p-4 rounded-lg ring-1 ring-inset ring-slate-200">
+                                <p class="text-slate-500 mb-1">총 정산 계약</p>
+                                <h3 class="text-2xl font-bold m-0 tabular-nums">32건</h3>
+                            </div>
+                            <div class="p-4 rounded-lg ring-1 ring-inset ring-slate-200">
+                                <p class="text-slate-500 mb-1">진행 중 정산</p>
+                                <h3 class="text-2xl font-bold m-0 tabular-nums">8건</h3>
+                            </div>
+                            <div class="p-4 rounded-lg ring-1 ring-inset ring-slate-200">
+                                <p class="text-slate-500 mb-1">총 예상 금액</p>
+                                <h3 class="text-2xl font-bold m-0 tabular-nums">₩18,400,000</h3>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section v-if="activePage === 'partner-ratio'" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h2 class="text-lg font-bold text-slate-900 m-0">파트너 정산 비율</h2>
+                                    <span v-if="partnerRatioClosed" class="closed-chip">
+                                        <i data-lucide="lock"></i>마감
+                                    </span>
+                                </div>
+                                <p class="text-slate-500 m-0">파트너별 매출 수수료율, 서빙피 분담 비율, 운영 대행 수수료를 년/월 단위로 관리합니다.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <label class="text-[13px] font-medium text-slate-700 mr-1" for="ratioMonth">적용 년월</label>
+                                <input id="ratioMonth" type="month" class="select select-sm w-auto" v-model="selectedMonth">
+                                <button type="button" class="btn btn-outline btn-sm" :disabled="partnerRatioClosed" @click="resetPartnerRatios">변경 취소</button>
+                                <label class="switch ml-2">
+                                    <input
+                                        id="ratioCloseToggle"
+                                        type="checkbox"
+                                        :checked="partnerRatioClosed"
+                                        @change="togglePartnerRatioClosed"
+                                    >
+                                    <span class="text-sm text-slate-700">{{ partnerRatioClosed ? '마감' : '마감되지 않음' }}</span>
+                                </label>
+                                <button type="button" class="btn btn-primary btn-sm" :disabled="partnerRatioClosed" @click="savePartnerRatios">저장</button>
+                            </div>
+                        </div>
+
+                        <div class="note mb-3" :class="hasOwnRatios ? 'note-primary' : 'note-info'">
+                            <template v-if="hasOwnRatios">
+                                <span><strong>{{ selectedMonth }}</strong> 기준 정산 비율이 저장되어 있습니다.
+                                <button v-if="!partnerRatioClosed" type="button" class="btn-link text-sm ml-1" @click="clearMonthOverride">이전 달 기준으로 되돌리기</button></span>
+                            </template>
+                            <template v-else-if="effectiveMonth">
+                                <span><strong>{{ selectedMonth }}</strong>는 별도 설정이 없어 <strong>{{ effectiveMonth }}</strong> 기준이 그대로 적용됩니다. 저장하면 {{ selectedMonth }} 전용 값으로 분리됩니다.</span>
+                            </template>
+                            <template v-else>
+                                <span>저장된 정산 비율이 없습니다. 아래 표를 채워 저장해 주세요.</span>
+                            </template>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="dtbl">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="text-left w-48">구분</th>
+                                        <th scope="col" class="text-right w-32">수수료</th>
+                                        <th scope="col" class="text-right w-40">서빙피 분담 비율<br><small class="text-slate-400 font-normal">(해당 파트너)</small></th>
+                                        <th scope="col" class="text-left">운영 대행 수수료<br><small class="text-slate-400 font-normal">선택된 파트너 광고 단위 ID 매출의 해당 %를 부과</small></th>
+                                        <th scope="col" class="w-12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(partner, idx) in editingPartners" :key="idx">
+                                        <td>
+                                            <input type="text" class="input input-sm" :disabled="partnerRatioClosed" v-model="partner.name" placeholder="파트너명">
+                                        </td>
+                                        <td>
+                                            <div class="ig w-28">
+                                                <input type="number" min="0" max="100" step="1" :disabled="partnerRatioClosed" v-model.number="partner.salesCommission">
+                                                <span class="ig-text">%</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="ig w-28">
+                                                <input type="number" min="0" max="100" step="1" :disabled="partnerRatioClosed" v-model.number="partner.servingFeeShare">
+                                                <span class="ig-text">%</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="flex items-center flex-wrap gap-2">
+                                                <span v-for="op in (partner.operatingFeePartners || [])" :key="op.name" class="badge badge-primary">
+                                                    {{ op.name }} {{ op.rate != null && op.rate !== '' ? op.rate + '%' : '0%' }}
+                                                </span>
+                                                <span v-if="!(partner.operatingFeePartners || []).length" class="text-slate-400 text-xs">없음</span>
+                                                <div class="dropdown relative ml-auto">
+                                                    <button type="button" class="btn btn-outline btn-sm" :disabled="partnerRatioClosed" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                                        대상 파트너 선택<span v-if="(partner.operatingFeePartners || []).length"> ({{ partner.operatingFeePartners.length }})</span>
+                                                        <i data-lucide="chevron-down"></i>
+                                                    </button>
+                                                    <div class="dropdown-menu dropdown-menu-end w-72">
+                                                        <p class="px-2 pt-1 pb-2 mb-1 text-xs text-slate-500 border-b border-slate-100">
+                                                            {{ partner.name || '이 파트너' }}의 운영 대행 수수료를<br>적용할 파트너와 비율을 각각 설정하세요.
+                                                        </p>
+                                                        <template v-if="operatingFeeCandidates(idx).length">
+                                                            <div v-for="other in operatingFeeCandidates(idx)" :key="other.index" class="flex items-center gap-2 px-2 py-1.5">
+                                                                <label class="flex items-center gap-2 flex-1 m-0 cursor-pointer">
+                                                                    <input type="checkbox" class="check" :disabled="partnerRatioClosed" :checked="isOperatingFeePartnerSelected(idx, other.name)" @change="toggleOperatingFeePartner(idx, other.name)">
+                                                                    <span class="text-sm">{{ other.name }}</span>
+                                                                </label>
+                                                                <div class="ig" style="width:92px">
+                                                                    <input type="number" min="0" max="100" step="1" :disabled="partnerRatioClosed || !isOperatingFeePartnerSelected(idx, other.name)" :value="getOperatingFeePartnerRate(idx, other.name)" @input="setOperatingFeePartnerRate(idx, other.name, $event.target.value)" placeholder="0">
+                                                                    <span class="ig-text">%</span>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                        <p v-else class="px-2 text-slate-400 text-xs m-0">선택 가능한 파트너가 없습니다.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="text-right">
+                                            <button type="button" class="btn btn-sm btn-danger-outline" :disabled="partnerRatioClosed" @click="removePartner(idx)" title="삭제">
+                                                <i data-lucide="trash-2"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="editingPartners.length === 0">
+                                        <td colspan="5" class="text-center text-slate-500 py-4">등록된 파트너가 없습니다. 아래 "파트너 추가" 버튼으로 추가해 주세요.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="flex justify-between items-center mt-3">
+                            <button type="button" class="btn btn-outline btn-sm" :disabled="partnerRatioClosed" @click="addPartner">
+                                <i data-lucide="plus"></i>파트너 추가
+                            </button>
+                            <span v-if="saveMessage" class="text-emerald-600 text-xs">{{ saveMessage }}</span>
+                        </div>
+                    </section>
+
+                    <section v-if="activePage === 'partner-assignment' && !selectedAssignmentPartner" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900 mb-1">파트너 할당 기준</h2>
+                                <p class="text-slate-500 m-0">파트너를 선택해 정산에 사용할 광고 단위 ID를 관리합니다.</p>
+                            </div>
+                        </div>
+
+                        <div v-if="assignmentPartnerList.length === 0" class="note note-info">
+                            <span>먼저 <strong>파트너 정산 비율</strong> 메뉴에서 파트너를 등록해 주세요.</span>
+                        </div>
+
+                        <div v-else class="partner-tile-grid">
+                            <button
+                                v-for="partnerName in assignmentPartnerList"
+                                :key="partnerName"
+                                type="button"
+                                class="partner-tile"
+                                @click="openPartnerAssignments(partnerName)"
+                            >
+                                <span class="partner-tile-name">{{ partnerName }}</span>
+                                <span class="partner-tile-count">{{ getAssignmentCount(partnerName).toLocaleString() }}<small> 개</small></span>
+                                <span class="partner-tile-cta">광고 단위 관리 <i data-lucide="chevron-right"></i></span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <section v-if="activePage === 'partner-assignment' && selectedAssignmentPartner" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <button type="button" class="btn-link text-sm mb-1" @click="closePartnerAssignments">
+                                    <i data-lucide="arrow-left"></i>목록으로
+                                </button>
+                                <div class="flex items-baseline flex-wrap gap-2">
+                                    <h2 class="text-lg font-bold text-slate-900 m-0">{{ selectedAssignmentPartner }}</h2>
+                                    <span class="text-slate-500 text-xs">전체 <strong>{{ getAssignmentCount(selectedAssignmentPartner).toLocaleString() }}</strong>개 광고 단위 ID 등록됨</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button" class="btn btn-outline btn-sm" @click="resetAssignments">변경 취소</button>
+                                <button type="button" class="btn btn-primary btn-sm" @click="saveAssignments">저장</button>
+                            </div>
+                        </div>
+
+                        <div class="rounded-lg ring-1 ring-inset ring-slate-200 bg-slate-50/40 p-4 mb-3">
+                            <label class="label flex items-center gap-1 mb-1">
+                                <i data-lucide="clipboard-plus"></i>광고 단위 ID 일괄 추가
+                            </label>
+                            <p class="text-slate-500 text-xs mb-2">한 줄에 하나씩, 또는 쉼표·공백·탭으로 구분하여 붙여넣으세요. 중복은 자동으로 제외됩니다.</p>
+                            <textarea class="textarea text-sm" rows="4" v-model="bulkAddInput" placeholder="35656389&#10;12208663&#10;...&#10;또는&#10;35656389, 12208663, 90091237"></textarea>
+                            <div class="flex justify-end mt-2">
+                                <button type="button" class="btn btn-primary btn-sm" :disabled="!bulkAddInput.trim()" @click="bulkAddAdUnits">
+                                    <i data-lucide="plus"></i>추가
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div class="ig w-80 max-w-full focus-within:ring-2">
+                                <span class="ig-text border-l-0 border-r border-slate-200 bg-transparent"><i data-lucide="search"></i></span>
+                                <input type="text" class="text-left flex-1 px-2.5" v-model="assignmentSearch" placeholder="광고 단위 ID 또는 이름으로 검색" @input="assignmentPage = 1">
+                                <button v-if="assignmentSearch" class="ig-text hover:text-slate-700" type="button" @click="assignmentSearch = ''; assignmentPage = 1"><i data-lucide="x"></i></button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-slate-500 text-xs">
+                                    총 {{ filteredAdUnits().length.toLocaleString() }}개<span v-if="assignmentSearch"> 검색됨</span>
+                                </span>
+                                <button type="button" class="btn btn-danger-outline btn-sm" :disabled="selectedCount() === 0" @click="deleteSelectedAdUnits">
+                                    선택 삭제<span v-if="selectedCount()"> ({{ selectedCount() }})</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="dtbl">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="w-10 text-center">
+                                            <input type="checkbox" class="check" :checked="isPageAllSelected()" @change="togglePageSelection">
+                                        </th>
+                                        <th scope="col" class="text-left w-48">광고 단위 ID</th>
+                                        <th scope="col" class="text-left">광고 단위명</th>
+                                        <th scope="col" class="w-12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(unit, idx) in pagedAdUnits()" :key="adUnitKey(unit, idx)">
+                                        <td class="text-center">
+                                            <input type="checkbox" class="check" :checked="isAdUnitSelected(unit, idx)" @change="toggleAdUnitSelection(unit, idx)">
+                                        </td>
+                                        <td>
+                                            <input type="text" class="input input-sm" v-model="unit.adUnitId" placeholder="광고 단위 ID">
+                                        </td>
+                                        <td>
+                                            <input type="text" class="input input-sm" v-model="unit.adUnitName" placeholder="(선택) 광고 단위명">
+                                        </td>
+                                        <td class="text-right">
+                                            <button type="button" class="btn btn-sm btn-danger-outline" @click="removeAdUnit(selectedAssignmentPartner, unit, idx)" title="삭제">
+                                                <i data-lucide="trash-2"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="pagedAdUnits().length === 0">
+                                        <td colspan="4" class="text-center text-slate-500 py-4">
+                                            <span v-if="getAssignmentCount(selectedAssignmentPartner) === 0">등록된 광고 단위 ID가 없습니다. 위의 일괄 추가 영역에서 ID를 붙여넣으세요.</span>
+                                            <span v-else>검색 결과가 없습니다.</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div v-if="totalPages() > 1" class="flex justify-between items-center mt-3">
+                            <span class="text-slate-500 text-xs tabular-nums">
+                                {{ ((assignmentPage - 1) * assignmentPageSize + 1).toLocaleString() }} -
+                                {{ Math.min(assignmentPage * assignmentPageSize, filteredAdUnits().length).toLocaleString() }}
+                                / {{ filteredAdUnits().length.toLocaleString() }}
+                            </span>
+                            <nav class="pg">
+                                <button type="button" @click="gotoPage(1)" :disabled="assignmentPage === 1">«</button>
+                                <button type="button" @click="gotoPage(assignmentPage - 1)" :disabled="assignmentPage === 1">‹</button>
+                                <span class="pg-cur">{{ assignmentPage }} / {{ totalPages() }}</span>
+                                <button type="button" @click="gotoPage(assignmentPage + 1)" :disabled="assignmentPage === totalPages()">›</button>
+                                <button type="button" @click="gotoPage(totalPages())" :disabled="assignmentPage === totalPages()">»</button>
+                            </nav>
+                        </div>
+
+                        <div v-if="assignmentSaveMessage" class="text-emerald-600 text-xs mt-2">{{ assignmentSaveMessage }}</div>
+                    </section>
+
+                    <section v-if="activePage === 'serving-fee'" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h2 class="text-lg font-bold text-slate-900 m-0">월별 서빙피 단가</h2>
+                                    <span v-if="servingFeeClosed" class="closed-chip">
+                                        <i data-lucide="lock"></i>마감
+                                    </span>
+                                </div>
+                                <p class="text-slate-500 m-0">광고게재 단가 구간별 금액·차감분을 입력하면 평균 서빙피 단가를 자동 계산합니다.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <label class="text-[13px] font-medium text-slate-700 mr-1" for="servingFeeMonth">적용 년월</label>
+                                <input id="servingFeeMonth" type="month" class="select select-sm w-auto" v-model="servingFeeSelectedMonth">
+                                <button type="button" class="btn btn-outline btn-sm" :disabled="servingFeeClosed" @click="resetServingFee">변경 취소</button>
+                                <label class="switch ml-2">
+                                    <input
+                                        id="servingFeeCloseToggle"
+                                        type="checkbox"
+                                        :checked="servingFeeClosed"
+                                        @change="toggleServingFeeClosed"
+                                    >
+                                    <span class="text-sm text-slate-700">{{ servingFeeClosed ? '마감' : '마감되지 않음' }}</span>
+                                </label>
+                                <button type="button" class="btn btn-primary btn-sm" :disabled="servingFeeClosed" @click="saveServingFee">저장</button>
+                            </div>
+                        </div>
+
+                        <div class="note mb-3" :class="hasOwnServingFee ? 'note-primary' : 'note-info'">
+                            <template v-if="hasOwnServingFee">
+                                <span><strong>{{ servingFeeSelectedMonth }}</strong> 기준 서빙피 단가가 저장되어 있습니다.
+                                <button v-if="!servingFeeClosed" type="button" class="btn-link text-sm ml-1" @click="clearServingFeeMonthOverride">이전 달 기준으로 되돌리기</button></span>
+                            </template>
+                            <template v-else-if="servingFeeEffectiveMonth">
+                                <span><strong>{{ servingFeeSelectedMonth }}</strong>는 별도 설정이 없어 <strong>{{ servingFeeEffectiveMonth }}</strong> 기준이 그대로 적용됩니다. 저장하면 {{ servingFeeSelectedMonth }} 전용 값으로 분리됩니다.</span>
+                            </template>
+                            <template v-else>
+                                <span>저장된 서빙피 단가가 없습니다. 아래 표를 채워 저장해 주세요.</span>
+                            </template>
+                        </div>
+
+                        <div class="content-2col">
+                            <div>
+                                <div class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col" class="text-left w-24">구분</th>
+                                                <th scope="col" class="text-right">단가($)</th>
+                                                <th scope="col" class="text-left">monthly Impressions</th>
+                                                <th scope="col" class="text-right">금액($)</th>
+                                                <th scope="col" class="text-right">비중<br><small class="text-slate-400 font-normal">광고게재 금액($) ÷ 합계</small></th>
+                                                <th scope="col" class="w-12"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(tier, idx) in editingServingFee.tiers" :key="'tier-' + idx">
+                                                <td>
+                                                    <span v-if="idx === 0" class="font-medium text-slate-700">광고게재</span>
+                                                </td>
+                                                <td>
+                                                    <input type="number" step="0.0001" class="input input-sm text-right" v-model.number="tier.unitPrice" placeholder="0.0000" :disabled="servingFeeClosed">
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="input input-sm" v-model="tier.range" placeholder="예: 0~50,000,000" :disabled="servingFeeClosed">
+                                                </td>
+                                                <td>
+                                                    <money-input input-class="input input-sm text-right" v-model="tier.amount" placeholder="0.00" :disabled="servingFeeClosed"></money-input>
+                                                </td>
+                                                <td class="text-right text-slate-500">{{ formatRatio(servingFeeRowRatio(tier.amount)) }}</td>
+                                                <td class="text-right">
+                                                    <button type="button" class="btn btn-sm btn-danger-outline" :disabled="servingFeeClosed" @click="removeServingFeeTier(idx)" title="삭제">
+                                                        <i data-lucide="trash-2"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="editingServingFee.tiers.length === 0">
+                                                <td colspan="6" class="text-center text-slate-500 py-3">등록된 단가 구간이 없습니다.</td>
+                                            </tr>
+
+                                            <tr v-for="(d, idx) in editingServingFee.deductions" :key="'ded-' + idx">
+                                                <td>
+                                                    <span v-if="idx === 0" class="font-medium text-slate-700">차감분</span>
+                                                </td>
+                                                <td>
+                                                    <input type="number" step="0.0001" class="input input-sm text-right" v-model.number="d.unitPrice" placeholder="0.0000" :disabled="servingFeeClosed">
+                                                </td>
+                                                <td></td>
+                                                <td>
+                                                    <money-input input-class="input input-sm text-right" v-model="d.amount" placeholder="0.00" :disabled="servingFeeClosed"></money-input>
+                                                </td>
+                                                <td></td>
+                                                <td class="text-right">
+                                                    <button type="button" class="btn btn-sm btn-danger-outline" :disabled="servingFeeClosed" @click="removeServingFeeDeduction(idx)" title="삭제">
+                                                        <i data-lucide="trash-2"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+
+                                            <tr class="total-row">
+                                                <td colspan="3" class="text-right font-semibold">합계</td>
+                                                <td class="text-right font-semibold">
+                                                    {{ formatCurrency(servingFeeTotalAmount) }}
+                                                    <div class="text-xs font-normal text-slate-500 mt-1">광고게재 금액($)의 합</div>
+                                                </td>
+                                                <td colspan="2"></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2 mt-3">
+                                    <button type="button" class="btn btn-outline btn-sm" :disabled="servingFeeClosed" @click="addServingFeeTier">
+                                        <i data-lucide="plus"></i>단가 구간 추가
+                                    </button>
+                                    <button type="button" class="btn btn-outline btn-sm" :disabled="servingFeeClosed" @click="addServingFeeDeduction">
+                                        <i data-lucide="plus"></i>차감분 추가
+                                    </button>
+                                    <span v-if="servingFeeSaveMessage" class="text-emerald-600 text-xs self-center ml-auto">{{ servingFeeSaveMessage }}</span>
+                                </div>
+                            </div>
+
+                            <aside>
+                                <div class="result-card">
+                                    <p class="result-label">평균 서빙피 단가</p>
+                                    <p class="result-value">
+                                        <span v-if="servingFeeAverageUnitPrice !== null"><span class="result-currency">$</span>{{ formatUnitPrice(servingFeeAverageUnitPrice) }}</span>
+                                        <span v-else class="text-slate-400">-</span>
+                                    </p>
+                                    <p class="text-primary-700/70 text-xs m-0">
+                                        가중평균 공식: Σ(단가 × 비중)<br>
+                                        합계 금액이 0이면 계산되지 않습니다.
+                                    </p>
+                                </div>
+                            </aside>
+                        </div>
+                    </section>
+
+                    <section v-if="activePage === 'monthly-settlement-base'" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h2 class="text-lg font-bold text-slate-900 m-0">월별 정산 기초 자료</h2>
+                                    <span v-if="msbClosed" class="closed-chip">
+                                        <i data-lucide="lock"></i>마감
+                                    </span>
+                                </div>
+                                <p class="text-slate-500 m-0">광고수익총금액과 서빙피 자료를 탭으로 나누어 관리합니다.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button" class="btn btn-outline btn-sm" @click="refreshMonthlyBase" title="새로고침">
+                                    <i data-lucide="rotate-cw"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline btn-sm" @click="openMsbUploadModal">
+                                    <i data-lucide="upload-cloud"></i>월별 정산 기초 자료 업로드
+                                </button>
+                                <span class="w-px h-6 bg-slate-200 mx-1"></span>
+                                <label class="text-[13px] font-medium text-slate-700 mr-1" for="msbMonth">적용 년월</label>
+                                <input id="msbMonth" type="month" class="select select-sm w-auto" v-model="msbSelectedMonth">
+                                <label class="switch ml-2">
+                                    <input
+                                        id="msbCloseToggle"
+                                        type="checkbox"
+                                        :checked="msbClosed"
+                                        @change="toggleMsbClosed"
+                                    >
+                                    <span class="text-sm text-slate-700">{{ msbClosed ? '마감' : '마감되지 않음' }}</span>
+                                </label>
+                                <button type="button" class="btn btn-primary btn-sm" :disabled="msbClosed" @click="saveMonthlyBase">
+                                    <i data-lucide="save"></i>저장
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="msbLoadError" class="note note-danger py-2 mb-3"><span>{{ msbLoadError }}</span></div>
+                        <div v-else-if="msbSaveMessage" class="note note-success py-2 mb-3"><span>{{ msbSaveMessage }}</span></div>
+                        <div v-else-if="msbLoadMessage" class="note note-info py-2 mb-3"><span>{{ msbLoadMessage }}</span></div>
+
+                        <div class="ptabs mb-4">
+                            <button type="button" class="ptab" :class="{ active: msbActiveTab === 'revenue' }" @click="setMsbActiveTab('revenue')">
+                                광고수익총금액
+                                <span class="badge badge-secondary" v-if="msbRevenueRowCount">{{ msbRevenueRowCount.toLocaleString() }}</span>
+                            </button>
+                            <button type="button" class="ptab" :class="{ active: msbActiveTab === 'serving' }" @click="setMsbActiveTab('serving')">
+                                서빙피 자료
+                                <span class="badge badge-secondary" v-if="msbServingRowCount">{{ msbServingRowCount.toLocaleString() }}</span>
+                            </button>
+                        </div>
+
+                        <div>
+                            <div v-show="msbActiveTab === 'revenue'">
+                                <div v-if="msbRevenueRowsView.length" class="flex flex-wrap items-center gap-1.5 text-sm text-slate-600 mb-3">
+                                    <span>전체 <strong>{{ msbRevenueRowsView.length.toLocaleString() }}</strong>건</span>
+                                    <span class="text-slate-300">·</span>
+                                    <span>총 수익 <strong>{{ formatKrw(msbRevenueTotal) }}</strong></span>
+                                    <span v-if="msbRevenueUnmappedCount" class="text-slate-300">·</span>
+                                    <span v-if="msbRevenueUnmappedCount" class="text-amber-600 inline-flex items-center gap-1">
+                                        <i data-lucide="triangle-alert"></i>미할당 <strong>{{ msbRevenueUnmappedCount.toLocaleString() }}</strong>건
+                                    </span>
+                                </div>
+
+                                <div v-if="msbRevenuePartnerSummary.length" class="flex flex-wrap items-center gap-2 mb-3">
+                                    <span class="text-xs font-medium text-slate-500">파트너별 수익비율 합</span>
+                                    <span
+                                        v-for="p in msbRevenuePartnerSummary"
+                                        :key="'rev-sum-' + p.name"
+                                        class="inline-flex items-center gap-1.5 h-6 px-2 rounded-md text-xs ring-1 ring-inset"
+                                        :class="p.unassigned ? 'bg-amber-50 ring-amber-200 text-amber-700' : 'bg-slate-50 ring-slate-200 text-slate-700'"
+                                    >
+                                        <span class="font-medium">{{ p.name }}</span>
+                                        <span class="tabular-nums">{{ formatRevenueRatio(p.revenueRatio) }}</span>
+                                    </span>
+                                </div>
+
+                                <div v-if="msbRevenueRowsView.length" class="flex flex-wrap items-center gap-2 mb-2">
+                                    <div class="ig w-72 max-w-full focus-within:ring-2">
+                                        <span class="ig-text border-l-0 border-r border-slate-200 bg-transparent"><i data-lucide="search"></i></span>
+                                        <input type="text" class="text-left flex-1 px-2.5" v-model="msbRevenueSearch" placeholder="광고 단위, 광고 단위 ID, 파트너 검색">
+                                        <button v-if="msbRevenueSearch" class="ig-text hover:text-slate-700" type="button" @click="msbRevenueSearch = ''"><i data-lucide="x"></i></button>
+                                    </div>
+                                    <span class="text-slate-500 text-xs">{{ msbRevenueRowsFiltered.length.toLocaleString() }}건 표시</span>
+                                    <button type="button" class="btn btn-success-outline btn-sm ml-auto" :disabled="!msbRevenueRowsFiltered.length" @click="exportRevenueExcel">
+                                        <i data-lucide="file-spreadsheet"></i>엑셀로 내보내기
+                                    </button>
+                                </div>
+
+                                <div v-if="msbRevenueRowsView.length" class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">광고 단위 ID</th>
+                                                <th class="text-left">광고 단위</th>
+                                                <th class="text-right">총 노출수</th>
+                                                <th class="text-right">총 클릭수</th>
+                                                <th class="text-right">총 클릭률</th>
+                                                <th class="text-right">총 평균 eCPM</th>
+                                                <th class="text-right bg-primary-50/50">전체 CPM 및 CPC 수익(원)</th>
+                                                <th class="text-right bg-primary-50/50">수익비율</th>
+                                                <th class="text-right bg-primary-50/50">Ad Exchange 수익(원)</th>
+                                                <th class="text-left">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <span>파트너 할당</span>
+                                                        <button type="button" class="inline-flex items-center justify-center size-6 rounded-md hover:bg-slate-100" :class="{ 'text-primary-600': msbRevenueFilterActive }" @click.stop="toggleFilterMenu('revenue', $event)" title="필터">
+                                                            <i :data-lucide="msbRevenueFilterActive ? 'filter-x' : 'filter'"></i>
+                                                        </button>
+                                                    </div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(row, idx) in msbRevenueRowsFiltered" :key="'rev-' + idx + '-' + row.adUnitId">
+                                                <td class="mono text-slate-700">{{ row.adUnitId }}</td>
+                                                <td class="text-slate-700">{{ row.adUnitName || '-' }}</td>
+                                                <td class="text-right">{{ row.impressions.toLocaleString() }}</td>
+                                                <td class="text-right">{{ row.clicks.toLocaleString() }}</td>
+                                                <td class="text-right">{{ formatCtr(row.ctr) }}</td>
+                                                <td class="text-right">{{ row.avgEcpm.toLocaleString() }}</td>
+                                                <td class="text-right cell-base">{{ formatKrw(row.revenue) }}</td>
+                                                <td class="text-right cell-base">{{ formatRevenueRatio(row.revenueRatio) }}</td>
+                                                <td class="text-right cell-base">{{ formatKrw(row.adxRevenue) }}</td>
+                                                <td>
+                                                    <button v-if="row.partner" type="button" class="inline-flex items-center gap-1 h-6 px-2 rounded-md text-xs bg-primary-50 text-primary-700 ring-1 ring-inset ring-primary-200 hover:bg-primary-100 disabled:opacity-60" :disabled="msbClosed" :title="msbClosed ? '' : '파트너 변경'" @click="openPartnerAssignModal(row.adUnitId, row.adUnitName)">
+                                                        <span>{{ row.partner }}</span>
+                                                        <i v-if="!msbClosed" data-lucide="pencil"></i>
+                                                    </button>
+                                                    <button v-else type="button" class="btn btn-outline btn-sm" :disabled="msbClosed" @click="openPartnerAssignModal(row.adUnitId, row.adUnitName)">
+                                                        <i data-lucide="user-plus"></i>할당
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="msbRevenueRowsFiltered.length === 0">
+                                                <td colspan="10" class="text-center text-slate-500 py-4">검색/필터 조건에 해당하는 항목이 없습니다.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div v-else class="note note-info mt-3">
+                                    <span>광고수익총금액 CSV를 업로드해 주세요.
+                                    <template v-if="msbSelectedMonth === '2026-04'">
+                                        <br><small class="text-slate-500">2026-04는 <code class="mono text-xs bg-white/60 rounded px-1">document/2026.04/</code> 폴더에 파일이 있으면 자동으로 로드됩니다.</small>
+                                    </template></span>
+                                </div>
+                            </div>
+
+                            <div v-show="msbActiveTab === 'serving'">
+                                <div v-if="msbServingRowsView.length" class="flex flex-wrap items-center gap-1.5 text-sm text-slate-600 mb-3">
+                                    <span>전체 <strong>{{ msbServingRowsView.length.toLocaleString() }}</strong>건</span>
+                                    <span class="text-slate-300">·</span>
+                                    <span>월별 서빙피 단가 <strong>
+                                        <template v-if="msbServingUnitPrice !== null">${{ formatUnitPrice4(msbServingUnitPrice) }}</template>
+                                        <template v-else>미설정</template>
+                                    </strong></span>
+                                    <span class="text-slate-300">·</span>
+                                    <span>총 서빙피 <strong>{{ formatServingFee(msbServingFeeTotal) }}</strong></span>
+                                    <span v-if="msbServingUnmappedCount" class="text-slate-300">·</span>
+                                    <span v-if="msbServingUnmappedCount" class="text-amber-600 inline-flex items-center gap-1">
+                                        <i data-lucide="triangle-alert"></i>미할당 <strong>{{ msbServingUnmappedCount.toLocaleString() }}</strong>건
+                                    </span>
+                                </div>
+
+                                <div v-if="msbServingPartnerSummary.length" class="flex flex-wrap items-center gap-2 mb-3">
+                                    <span class="text-xs font-medium text-slate-500">파트너별 서빙피 합 · 비율</span>
+                                    <span
+                                        v-for="p in msbServingPartnerSummary"
+                                        :key="'srv-sum-' + p.name"
+                                        class="inline-flex items-center gap-1.5 h-6 px-2 rounded-md text-xs ring-1 ring-inset"
+                                        :class="p.unassigned ? 'bg-amber-50 ring-amber-200 text-amber-700' : 'bg-slate-50 ring-slate-200 text-slate-700'"
+                                    >
+                                        <span class="font-medium">{{ p.name }}</span>
+                                        <span class="tabular-nums">{{ formatServingFee(p.servingFee) }} · {{ formatRevenueRatio(p.ratio) }}</span>
+                                    </span>
+                                </div>
+
+                                <div v-if="msbServingRowsView.length" class="flex flex-wrap items-center gap-2 mb-2">
+                                    <div class="ig w-72 max-w-full focus-within:ring-2">
+                                        <span class="ig-text border-l-0 border-r border-slate-200 bg-transparent"><i data-lucide="search"></i></span>
+                                        <input type="text" class="text-left flex-1 px-2.5" v-model="msbServingSearch" placeholder="광고 단위 ID, 광고 단위, 파트너 검색">
+                                        <button v-if="msbServingSearch" class="ig-text hover:text-slate-700" type="button" @click="msbServingSearch = ''"><i data-lucide="x"></i></button>
+                                    </div>
+                                    <span class="text-slate-500 text-xs">{{ msbServingRowsFiltered.length.toLocaleString() }}건 표시</span>
+                                    <button type="button" class="btn btn-success-outline btn-sm ml-auto" :disabled="!msbServingRowsFiltered.length" @click="exportServingExcel">
+                                        <i data-lucide="file-spreadsheet"></i>엑셀로 내보내기
+                                    </button>
+                                </div>
+
+                                <div v-if="msbServingRowsView.length" class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">광고 단위 ID</th>
+                                                <th class="text-left">광고 단위</th>
+                                                <th class="text-right">잔여 노출수</th>
+                                                <th class="text-right bg-primary-50/50">
+                                                    서빙피($)
+                                                    <small class="block font-normal text-slate-400">잔여 노출수 × 평균 서빙피 단가 ÷ 1,000</small>
+                                                </th>
+                                                <th class="text-right bg-primary-50/50">서빙피비율</th>
+                                                <th class="text-left">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <span>파트너 할당</span>
+                                                        <button type="button" class="inline-flex items-center justify-center size-6 rounded-md hover:bg-slate-100" :class="{ 'text-primary-600': msbServingFilterActive }" @click.stop="toggleFilterMenu('serving', $event)" title="필터">
+                                                            <i :data-lucide="msbServingFilterActive ? 'filter-x' : 'filter'"></i>
+                                                        </button>
+                                                    </div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(row, idx) in msbServingRowsFiltered" :key="'srv-' + idx + '-' + row.adUnitId">
+                                                <td class="mono text-slate-700">{{ row.adUnitId }}</td>
+                                                <td class="text-slate-700">{{ row.adUnitName || '-' }}</td>
+                                                <td class="text-right">{{ row.remainingImpressions.toLocaleString() }}</td>
+                                                <td class="text-right cell-base">
+                                                    <span class="font-medium">{{ formatServingFee(row.servingFee) }}</span>
+                                                </td>
+                                                <td class="text-right cell-base">{{ formatRevenueRatio(row.servingFeeRatio) }}</td>
+                                                <td>
+                                                    <button v-if="row.partner" type="button" class="inline-flex items-center gap-1 h-6 px-2 rounded-md text-xs bg-primary-50 text-primary-700 ring-1 ring-inset ring-primary-200 hover:bg-primary-100 disabled:opacity-60" :disabled="msbClosed" :title="msbClosed ? '' : '파트너 변경'" @click="openPartnerAssignModal(row.adUnitId, row.adUnitName)">
+                                                        <span>{{ row.partner }}</span>
+                                                        <i v-if="!msbClosed" data-lucide="pencil"></i>
+                                                    </button>
+                                                    <button v-else type="button" class="btn btn-outline btn-sm" :disabled="msbClosed" @click="openPartnerAssignModal(row.adUnitId, row.adUnitName)">
+                                                        <i data-lucide="user-plus"></i>할당
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="msbServingRowsFiltered.length === 0">
+                                                <td colspan="6" class="text-center text-slate-500 py-4">검색/필터 조건에 해당하는 항목이 없습니다.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div v-else class="note note-info mt-3">
+                                    <span>서빙피계산 인보이스확인 CSV를 업로드해 주세요.
+                                    <template v-if="msbSelectedMonth === '2026-04'">
+                                        <br><small class="text-slate-500">2026-04는 <code class="mono text-xs bg-white/60 rounded px-1">document/2026.04/</code> 폴더에 파일이 있으면 자동으로 로드됩니다.</small>
+                                    </template></span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div v-if="msbModalAdUnitId" class="modal-backdrop" @click.self="closePartnerAssignModal">
+                        <div class="modal-dialog">
+                            <div class="modal-header">
+                                <h5>{{ msbModalCurrentPartner ? '파트너 변경' : '파트너 할당' }}</h5>
+                                <button type="button" class="modal-close" @click="closePartnerAssignModal" aria-label="닫기"><i data-lucide="x"></i></button>
+                            </div>
+                            <div class="modal-body">
+                                <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm mb-3">
+                                    <dt class="text-slate-500">광고 단위 ID</dt>
+                                    <dd class="m-0"><code class="mono text-xs bg-slate-100 rounded px-1">{{ msbModalAdUnitId }}</code></dd>
+                                    <dt class="text-slate-500">광고 단위</dt>
+                                    <dd class="m-0">{{ msbModalAdUnitName || '-' }}</dd>
+                                    <template v-if="msbModalCurrentPartner">
+                                        <dt class="text-slate-500">현재 파트너</dt>
+                                        <dd class="m-0"><span class="badge badge-primary">{{ msbModalCurrentPartner }}</span></dd>
+                                    </template>
+                                </dl>
+                                <label class="label">파트너 선택</label>
+                                <select class="select" v-model="msbModalSelectedPartner">
+                                    <option value="" disabled>파트너를 선택하세요</option>
+                                    <option v-for="name in msbAvailablePartners" :key="name" :value="name">{{ name }}</option>
+                                </select>
+                                <p v-if="!msbAvailablePartners.length" class="text-red-600 text-xs mt-2 mb-0">
+                                    파트너 정산 비율에 등록된 파트너가 없습니다. 먼저 <strong>파트너 정산 비율</strong> 메뉴에서 파트너를 등록해 주세요.
+                                </p>
+                                <p class="text-slate-500 text-xs mt-2 mb-0">
+                                    저장 버튼 클릭 시 <strong>파트너 할당 기준</strong>에 즉시 반영됩니다.{{ msbModalCurrentPartner ? ' 기존 파트너 할당은 새 파트너로 변경됩니다.' : '' }}
+                                </p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline btn-sm" @click="closePartnerAssignModal">취소</button>
+                                <button type="button" class="btn btn-primary btn-sm" :disabled="!msbModalSelectedPartner || msbClosed" @click="savePartnerAssignment">저장</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="msbUploadModalOpen" class="modal-backdrop" @click.self="closeMsbUploadModal">
+                        <div class="modal-dialog max-w-2xl">
+                            <div class="modal-header">
+                                <h5>월별 정산 기초 자료 업로드</h5>
+                                <button type="button" class="modal-close" @click="closeMsbUploadModal" aria-label="닫기"><i data-lucide="x"></i></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <label class="text-[13px] font-semibold text-slate-700" for="msbUploadMonth">적용 년월</label>
+                                    <input id="msbUploadMonth" type="month" class="select select-sm w-auto" v-model="msbUploadMonth">
+                                    <span v-if="msbUploadMonthClosed" class="closed-chip ml-1">
+                                        <i data-lucide="lock"></i>마감
+                                    </span>
+                                </div>
+                                <div v-if="msbUploadMonthClosed" class="note note-warning py-2 mb-3">
+                                    <i data-lucide="lock"></i><span><strong>{{ msbUploadMonth }}</strong>은(는) 마감된 년월입니다. 업로드하려면 먼저 해당 년월의 마감을 해제해 주세요.</span>
+                                </div>
+                                <div v-if="msbLoadError" class="note note-danger py-2 mb-3"><span>{{ msbLoadError }}</span></div>
+                                <div v-else-if="msbLoadMessage" class="note note-success py-2 mb-3"><span>{{ msbLoadMessage }}</span></div>
+                                <div class="upload-grid">
+                                    <div class="upload-card" :class="{ 'is-disabled': msbUploadMonthClosed }">
+                                        <div class="upload-head">
+                                            <i data-lucide="upload"></i>
+                                            <span>광고수익총금액 (CSV)</span>
+                                        </div>
+                                        <p class="text-slate-500 text-xs mb-2">광고 단위별 노출·클릭·수익 정보</p>
+                                        <input type="file" accept=".csv" class="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 file:cursor-pointer" :disabled="msbUploadMonthClosed" @change="onRevenueFileSelected">
+                                        <p v-if="msbUploadRevenueRowCount" class="text-emerald-600 text-xs mb-0 mt-2 inline-flex items-center gap-1">
+                                            <i data-lucide="check-circle"></i>{{ msbUploadRevenueRowCount.toLocaleString() }}건 로드됨
+                                        </p>
+                                        <p v-else class="text-slate-500 text-xs mb-0 mt-2">파일을 선택해 주세요.</p>
+                                    </div>
+                                    <div class="upload-card" :class="{ 'is-disabled': msbUploadMonthClosed }">
+                                        <div class="upload-head">
+                                            <i data-lucide="upload"></i>
+                                            <span>서빙피계산 인보이스확인 (CSV)</span>
+                                        </div>
+                                        <p class="text-slate-500 text-xs mb-2">광고 단위별 잔여 노출수 정보</p>
+                                        <input type="file" accept=".csv" class="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 file:cursor-pointer" :disabled="msbUploadMonthClosed" @change="onServingFileSelected">
+                                        <p v-if="msbUploadServingRowCount" class="text-emerald-600 text-xs mb-0 mt-2 inline-flex items-center gap-1">
+                                            <i data-lucide="check-circle"></i>{{ msbUploadServingRowCount.toLocaleString() }}건 로드됨
+                                        </p>
+                                        <p v-else class="text-slate-500 text-xs mb-0 mt-2">파일을 선택해 주세요.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-primary btn-sm" @click="closeMsbUploadModal">닫기</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <teleport to="body">
+                        <div
+                            v-if="msbOpenFilter"
+                            class="filter-menu"
+                            :style="{ top: msbFilterMenuPos.top + 'px', left: msbFilterMenuPos.left + 'px' }"
+                            @click.stop
+                        >
+                            <div class="ig w-full mb-2 focus-within:ring-2">
+                                <span class="ig-text border-l-0 border-r border-slate-200 bg-transparent"><i data-lucide="search"></i></span>
+                                <input type="text" class="text-left flex-1 px-2.5" v-model="msbFilterSearch" placeholder="파트너 검색" ref="msbFilterSearchInput">
+                            </div>
+                            <label class="filter-item border-b border-slate-100 font-medium">
+                                <input type="checkbox" :checked="currentFilterExcluded.length === 0" @change="toggleAllFilter(msbOpenFilter)">
+                                <span>(전체 선택)</span>
+                            </label>
+                            <div class="max-h-60 overflow-auto">
+                                <label v-for="opt in currentFilterMenuOptions" :key="'flt-' + opt.value" class="filter-item">
+                                    <input type="checkbox" :checked="isFilterChecked(msbOpenFilter, opt.value)" @change="toggleFilterOption(msbOpenFilter, opt.value)">
+                                    <span :class="opt.value === '__unassigned__' ? 'text-amber-600' : ''">{{ opt.label }}</span>
+                                    <span class="filter-count">{{ opt.count.toLocaleString() }}</span>
+                                </label>
+                                <p v-if="!currentFilterMenuOptions.length" class="text-center text-slate-400 text-xs py-3 m-0">검색 결과가 없습니다.</p>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-slate-100">
+                                <button type="button" class="btn-link text-sm" @click="clearFilter(msbOpenFilter)">필터 해제</button>
+                                <button type="button" class="btn btn-primary btn-sm" @click="closeFilterMenu">확인</button>
+                            </div>
+                        </div>
+                    </teleport>
+
+                    <section v-if="activePage === 'exchange-rate'" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h2 class="text-lg font-bold text-slate-900 m-0">실정산금액 및 기준환율</h2>
+                                    <span v-if="exClosed" class="closed-chip">
+                                        <i data-lucide="lock"></i>마감
+                                    </span>
+                                </div>
+                                <p class="text-slate-500 m-0">인보이스 입금/송금액과 입금/비용 금액(원)을 입력하면 환율과 정산 기준환율을 자동 계산합니다.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <label class="text-[13px] font-medium text-slate-700 mr-1" for="exMonth">적용 년월</label>
+                                <input id="exMonth" type="month" class="select select-sm w-auto" v-model="exSelectedMonth">
+                                <button type="button" class="btn btn-outline btn-sm" :disabled="exClosed" @click="resetExchange">변경 취소</button>
+                                <label class="switch ml-2">
+                                    <input
+                                        id="exCloseToggle"
+                                        type="checkbox"
+                                        :checked="exClosed"
+                                        @change="toggleExchangeClosed"
+                                    >
+                                    <span class="text-sm text-slate-700">{{ exClosed ? '마감' : '마감되지 않음' }}</span>
+                                </label>
+                                <button type="button" class="btn btn-primary btn-sm" :disabled="exClosed" @click="saveExchange">
+                                    <i data-lucide="save"></i>저장
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="exSaveMessage" class="note note-success py-2 mb-3"><span>{{ exSaveMessage }}</span></div>
+
+                        <div class="content-2col">
+                            <div>
+                                <div class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col" class="text-left">구분</th>
+                                                <th scope="col" class="text-right">매출(금액)</th>
+                                                <th scope="col" class="text-right">서빙피(비용)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <th scope="row" class="text-left font-medium text-slate-700">인보이스 입금/송금 ($)</th>
+                                                <td>
+                                                    <money-input input-class="input input-sm text-right" v-model="editingExchange.revenueInvoiceUsd" placeholder="0.00" :disabled="exClosed"></money-input>
+                                                </td>
+                                                <td>
+                                                    <money-input input-class="input input-sm text-right" v-model="editingExchange.servingInvoiceUsd" placeholder="0.00" :disabled="exClosed"></money-input>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" class="text-left font-medium text-slate-700">입금/비용 금액 (원)</th>
+                                                <td>
+                                                    <money-input input-class="input input-sm text-right" v-model="editingExchange.revenueAmountKrw" placeholder="0" :disabled="exClosed"></money-input>
+                                                </td>
+                                                <td class="text-right text-slate-500">{{ formatExWon(exServingAmountKrw) }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" class="text-left font-medium text-slate-700">환율</th>
+                                                <td class="text-right text-slate-500">{{ formatExRate(exExchangeRate) }}</td>
+                                                <td class="text-right text-slate-500">{{ formatExRate(exExchangeRate) }}</td>
+                                            </tr>
+                                            <tr class="total-row">
+                                                <th scope="row" class="text-left font-medium text-slate-700">정산 기준환율</th>
+                                                <td class="text-right font-bold">{{ formatExWon(exBaseRate) }}</td>
+                                                <td class="text-right font-bold">{{ formatExWon(exBaseRate) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2 mt-3">
+                                    <span class="text-slate-500 text-xs self-center inline-flex items-center gap-1">
+                                        <span class="inline-block size-2.5 rounded-sm bg-white ring-1 ring-inset ring-slate-300"></span> 입력값
+                                        <span class="inline-block size-2.5 rounded-sm bg-slate-100 ring-1 ring-inset ring-slate-200 ml-3"></span> 계산값
+                                    </span>
+                                </div>
+                            </div>
+
+                            <aside>
+                                <div class="result-card">
+                                    <p class="result-label">정산 기준환율</p>
+                                    <p class="result-value">
+                                        <span v-if="exBaseRate !== null">{{ formatExWon(exBaseRate) }}<span class="result-currency ml-1">원</span></span>
+                                        <span v-else class="text-slate-400">-</span>
+                                    </p>
+                                    <p class="text-primary-700/70 text-xs m-0">
+                                        환율 = 입금/비용 금액(원) ÷ 인보이스 입금($)<br>
+                                        기준환율 = 환율의 소수점 이하 절삭<br>
+                                        서빙피(비용) 원화 = 서빙피 인보이스($) × 기준환율
+                                    </p>
+                                </div>
+                            </aside>
+                        </div>
+                    </section>
+
+                    <!-- 월별 정산: 목록 -->
+                    <section v-if="activePage === 'monthly-settlement' && settlementView === 'list'" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900 mb-1">월별 정산</h2>
+                                <p class="text-slate-500 m-0">년월별 정산 진행 상태를 확인하고, 입력 자료를 기초로 정산을 실행합니다.</p>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-sm" @click="openSettlementNewModal">
+                                <i data-lucide="plus"></i>새로운 년월 정산하기
+                            </button>
+                        </div>
+
+                        <div v-if="settlementMessage" class="note note-success py-2 mb-3"><span>{{ settlementMessage }}</span></div>
+
+                        <div class="overflow-x-auto">
+                            <table class="dtbl">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="text-left">년월</th>
+                                        <th scope="col" class="text-center">파트너 정산비율</th>
+                                        <th scope="col" class="text-center">월별 서빙피 단가</th>
+                                        <th scope="col" class="text-center">기초 자료</th>
+                                        <th scope="col" class="text-center">실정산/기준환율</th>
+                                        <th scope="col" class="text-center">정산 상태</th>
+                                        <th scope="col" class="text-left">정산 일시</th>
+                                        <th scope="col" class="text-right">작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="row in settlementMonths" :key="row.month">
+                                        <td class="font-semibold">{{ row.month }}</td>
+                                        <td class="text-center">
+                                            <span class="step-badge" :class="row.ratioClosed ? 'step-closed' : (row.hasRatio ? 'step-open' : 'step-none')">
+                                                {{ row.ratioClosed ? '마감' : (row.hasRatio ? '미마감' : '없음') }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="step-badge" :class="row.servingFeeClosed ? 'step-closed' : (row.hasServingFee ? 'step-open' : 'step-none')">
+                                                {{ row.servingFeeClosed ? '마감' : (row.hasServingFee ? '미마감' : '없음') }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="step-badge" :class="row.baseClosed ? 'step-closed' : (row.hasBase ? 'step-open' : 'step-none')">
+                                                {{ row.baseClosed ? '마감' : (row.hasBase ? '미마감' : '없음') }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="step-badge" :class="row.exClosed ? 'step-closed' : (row.hasExchange ? 'step-open' : 'step-none')">
+                                                {{ row.exClosed ? '마감' : (row.hasExchange ? '미마감' : '없음') }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span :class="settlementStatusClass(row.status)">{{ settlementStatusLabel(row.status) }}</span>
+                                        </td>
+                                        <td class="text-slate-500 text-xs">{{ row.status === 'none' ? '-' : formatSettledAt(row.settledAt) }}</td>
+                                        <td class="text-right">
+                                            <div class="inline-flex flex-nowrap justify-end gap-1">
+                                                <!-- 미정산 -->
+                                                <template v-if="row.status === 'none'">
+                                                    <button type="button" class="btn btn-primary btn-sm" :disabled="settlementBusy" @click="runSettlement(row.month, false)">
+                                                        <i data-lucide="calculator"></i>정산하기
+                                                    </button>
+                                                </template>
+                                                <!-- 정산완료 / 마감 -->
+                                                <template v-else>
+                                                    <button type="button" class="btn btn-outline btn-sm" :disabled="settlementBusy || row.status === 'closed'" @click="runSettlement(row.month, true)" title="현재 입력값으로 재계산">
+                                                        <i data-lucide="refresh-cw"></i>다시 정산하기
+                                                    </button>
+                                                    <button type="button" class="btn btn-primary btn-sm" @click="openSettlementDetail(row.month)">
+                                                        <i data-lucide="eye"></i>상세보기
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-sm"
+                                                        :class="row.status === 'closed' ? 'btn-danger' : 'btn-danger-outline'"
+                                                        @click="toggleSettlementClosed(row.month)">
+                                                        <i :data-lucide="row.status === 'closed' ? 'unlock' : 'lock'"></i>
+                                                        <span>{{ row.status === 'closed' ? '마감 해제' : '정산 마감' }}</span>
+                                                    </button>
+                                                    <button v-if="row.status === 'closed'"
+                                                        type="button" class="btn btn-primary btn-sm"
+                                                        @click="openMonthlyReport(row.month)"
+                                                        title="이 정산 결과를 기초로 한 월별 리포트로 이동합니다">
+                                                        <i data-lucide="file-bar-chart"></i>월리포트
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="settlementMonths.length === 0">
+                                        <td colspan="8" class="text-center text-slate-500 py-4">
+                                            정산할 년월이 없습니다. "새로운 년월 정산하기" 버튼으로 추가해 주세요.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p class="text-slate-500 text-xs mt-3 mb-0 inline-flex items-center gap-1">
+                            <i data-lucide="info"></i>정산은 마감된 <strong>파트너 정산 비율</strong>, <strong>월별 서빙피 단가</strong>, <strong>월별 정산 기초 자료</strong>, <strong>실정산금액/기준환율</strong>을 기초로 계산됩니다.
+                        </p>
+                    </section>
+
+                    <!-- 월별 정산: 상세보기 -->
+                    <section v-if="activePage === 'monthly-settlement' && settlementView === 'detail'" class="section-card mb-4">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <button type="button" class="btn-link text-sm mb-1" @click="closeSettlementDetail">
+                                    <i data-lucide="arrow-left"></i>목록으로
+                                </button>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-lg font-bold text-slate-900 m-0">{{ settlementDetailMonth }} 정산 상세</h2>
+                                    <span v-if="settlementDetailRecord && settlementDetailRecord.status === 'closed'" class="closed-chip">
+                                        <i data-lucide="lock"></i>마감
+                                    </span>
+                                </div>
+                                <p v-if="settlementDetailRecord" class="text-slate-500 text-xs mb-0 mt-1">
+                                    정산 일시: {{ formatSettledAt(settlementDetailRecord.settledAt) }}
+                                    <span v-if="settlementDetailData && settlementDetailData.meta.sourceRatioMonth"> · 적용 비율 기준: {{ settlementDetailData.meta.sourceRatioMonth }}</span>
+                                    <span v-if="settlementDetailData && settlementDetailData.meta.baseRate"> · 정산 기준환율: {{ formatWon(settlementDetailData.meta.baseRate) }}원</span>
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button type="button" class="btn btn-outline btn-sm"
+                                    :disabled="settlementBusy || (settlementDetailRecord && settlementDetailRecord.status === 'closed')"
+                                    @click="runSettlement(settlementDetailMonth, true)"
+                                    title="현재 입력값(파트너 비율, 서빙피 단가, 기초 자료, 기준환율)으로 정산 결과를 다시 계산합니다">
+                                    <i data-lucide="refresh-cw"></i>다시 정산하기
+                                </button>
+                                <label v-if="settlementDetailRecord && settlementDetailRecord.status !== 'none'" class="switch">
+                                    <input
+                                        id="settlementDetailCloseToggle"
+                                        type="checkbox"
+                                        :checked="settlementDetailRecord.status === 'closed'"
+                                        @change="toggleSettlementClosed(settlementDetailMonth)"
+                                    >
+                                    <span class="text-sm text-slate-700">{{ settlementDetailRecord.status === 'closed' ? '정산 마감' : '정산 마감되지 않음' }}</span>
+                                </label>
+                                <button v-if="settlementDetailRecord && settlementDetailRecord.status === 'closed'"
+                                    type="button" class="btn btn-primary btn-sm"
+                                    @click="openMonthlyReport(settlementDetailMonth)"
+                                    title="이 정산 결과를 기초로 한 월별 리포트로 이동합니다">
+                                    <i data-lucide="file-bar-chart"></i>월리포트
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="!settlementDetailData" class="note note-warning"><span>정산 데이터를 불러올 수 없습니다.</span></div>
+
+                        <template v-else>
+                            <div v-if="settlementDetailData.meta.unassignedRevenueCount || settlementDetailData.meta.unassignedServingCount" class="note note-warning py-2 mb-3">
+                                <i data-lucide="triangle-alert"></i>
+                                <span>미할당 광고 단위가 있습니다 (수익 {{ settlementDetailData.meta.unassignedRevenueCount.toLocaleString() }}건 · 서빙피 {{ settlementDetailData.meta.unassignedServingCount.toLocaleString() }}건).
+                                할당된 매출만으로 비율을 계산하므로 결과가 실제와 다를 수 있습니다. 기초 자료에서 파트너 할당을 완료한 뒤 다시 정산하세요.</span>
+                            </div>
+
+                            <div class="ptabs mb-4">
+                                <button type="button" class="ptab" :class="{ active: settlementDetailTab === 'commission' }" @click="setSettlementDetailTab('commission')">광고 매출 수수료 정산</button>
+                                <button type="button" class="ptab" :class="{ active: settlementDetailTab === 'operating' }" @click="setSettlementDetailTab('operating')">
+                                    운영대행 수수료 정산
+                                    <span class="badge badge-secondary" v-if="settlementDetailData.operatingGroups.length">{{ settlementDetailData.operatingGroups.length }}</span>
+                                </button>
+                                <button type="button" class="ptab" :class="{ active: settlementDetailTab === 'final' }" @click="setSettlementDetailTab('final')">최종 정산액 및 시냅스엠 수익 확인</button>
+                            </div>
+
+                            <div>
+                                <!-- 탭 1: 광고 매출 수수료 정산 -->
+                                <div v-show="settlementDetailTab === 'commission'" class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th rowspan="2" class="text-left align-middle">구분</th>
+                                                <th colspan="4" class="text-center bg-slate-100/70">매출/서빙피 배분기준액</th>
+                                                <th rowspan="2" class="text-right align-middle" v-tip="'입금금액 배분액(원) × 파트너 정산 비율 화면의 해당 파트너 수수료 비율'">수수료 적용<br>파트너 정산 금액(원)<br><small class="text-slate-400 font-normal">(입금금액 비율 적용)</small> <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                                <th rowspan="2" class="text-right align-middle" v-tip="'서빙피 배분액(원) × 파트너 정산 비율 화면의 해당 파트너 서빙피 분담 비율'">서빙피<br>파트너 분담액(원) <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                                <th rowspan="2" class="text-right align-middle" v-tip="'수수료 적용 파트너 정산금액(입금금액 비율 적용) − 서빙피 파트너 분담액'">최종 파트너<br>정산 금액(원) <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                                <th rowspan="2" class="text-right align-middle bg-primary-50/50" v-tip="'입금금액 배분액(원) − 서빙피 배분액(원) − 최종 파트너 정산 금액'">시냅스엠 수익(원) <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                            </tr>
+                                            <tr>
+                                                <th class="text-right bg-slate-100/70" v-tip="'실정산금액 및 기준환율 화면의 임금/비용 금액(원) &amp; 매출(금액) 칸 금액 × 수익 비율'">입금금액 배분액(원) <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                                <th class="text-right bg-slate-100/70" v-tip="'실정산금액 및 기준환율 화면의 임금/비용 금액(원) &amp; 서빙피(비용) 칸 금액 × 서빙피 비율'">서빙피 배분액(원) <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                                <th class="text-right bg-slate-50" v-tip="'월별 정산 기초 자료 &gt; 광고수익총금액 탭의 해당 파트너 수익비율 합계'">수익 비율 <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                                <th class="text-right bg-slate-50" v-tip="'월별 정산 기초 자료 &gt; 서빙피 자료 탭의 해당 파트너 서빙피비율 합계'">서빙피 비율 <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="r in settlementDetailData.rows" :key="'cm-' + r.name">
+                                                <td class="font-medium">
+                                                    {{ r.name }}
+                                                    <div v-if="r.isDirectCorrection" class="text-slate-500 text-xs font-normal mt-1">입금금액 배분액 합계 보정(잔여)</div>
+                                                </td>
+                                                <td class="text-right cell-base">
+                                                    {{ formatWon(r.revenueAlloc) }}
+                                                    <div v-if="r.revenueAllocIsAdx" class="text-slate-500 text-xs font-normal mt-1">= Ad Exchange 수익(원) 합계</div>
+                                                </td>
+                                                <td class="text-right cell-base">{{ formatWon(r.servingAlloc) }}</td>
+                                                <td class="text-right cell-ratio">{{ formatSettlePercent(r.revRatio) }}</td>
+                                                <td class="text-right cell-ratio">{{ formatSettlePercent(r.srvRatio) }}</td>
+                                                <td class="text-right">{{ formatWon(r.commissionSettle) }}</td>
+                                                <td class="text-right">{{ formatWon(r.servingShare) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(r.finalSettle) }}</td>
+                                                <td class="text-right cell-synapse">{{ formatWon(r.synapseBase) }}</td>
+                                            </tr>
+                                            <tr class="total-row">
+                                                <td class="font-semibold">합계</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.totals.revenueAlloc) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.totals.servingAlloc) }}</td>
+                                                <td class="text-right font-semibold">{{ formatRatioSum(settlementDetailData.totals.revRatio) }}</td>
+                                                <td class="text-right font-semibold">{{ formatRatioSum(settlementDetailData.totals.srvRatio) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.totals.commissionSettle) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.totals.servingShare) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.totals.finalSettle) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.totals.synapseBase) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p class="text-slate-500 text-xs mt-2 mb-0">합계 금액이 입금 금액(원), 서빙피 비용 금액(원)과 일치해야 합니다.</p>
+                                </div>
+
+                                <!-- 탭 2: 운영대행 수수료 정산 -->
+                                <div v-show="settlementDetailTab === 'operating'">
+                                    <div v-if="settlementDetailData.operatingGroups.length === 0" class="note note-info">
+                                        <span>운영 대행 수수료가 설정된 파트너가 없습니다. <strong>파트너 정산 비율</strong>에서 운영 대행 수수료율과 대상 파트너를 설정하면 이곳에 표시됩니다.</span>
+                                    </div>
+                                    <div v-for="g in settlementDetailData.operatingGroups" :key="'op-' + g.charger" class="operating-card mb-3">
+                                        <div class="operating-head">
+                                            <span>운영대행 수수료 정산 <strong>({{ g.charger }})</strong></span>
+                                            <span class="operating-total">
+                                                운영대행 수수료 합계: <strong>{{ formatWon(g.total) }}원</strong>
+                                            </span>
+                                        </div>
+                                        <div class="overflow-x-auto">
+                                            <table class="dtbl">
+                                                <thead>
+                                                    <tr>
+                                                        <th class="text-left">구분</th>
+                                                        <th class="text-right">시냅스엠 수익(원)</th>
+                                                        <th class="text-right">운영대행 수수료율</th>
+                                                        <th class="text-right" v-tip="'시냅스엠 수익(원) × 운영대행 수수료율'">운영대행 수수료액(원) <i data-lucide="info" class="text-slate-400 inline"></i></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr v-for="t in g.targets" :key="'opt-' + g.charger + '-' + t.name">
+                                                        <td class="font-medium">{{ t.name }}</td>
+                                                        <td class="text-right">{{ formatWon(t.synapseBase) }}</td>
+                                                        <td class="text-right">{{ t.rate }}%</td>
+                                                        <td class="text-right" :class="{ 'cell-muted': t.rate === 0 }">{{ formatSettleDecimal(t.fee) }}</td>
+                                                    </tr>
+                                                    <tr class="total-row">
+                                                        <td class="font-semibold" colspan="3">운영대행 수수료 합계</td>
+                                                        <td class="text-right font-semibold">{{ formatWon(g.total) }}원</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 탭 3: 최종 정산액 및 시냅스엠 수익 확인 -->
+                                <div v-show="settlementDetailTab === 'final'" class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">구분</th>
+                                                <th class="text-left">파트너</th>
+                                                <th class="text-right">금액 (원)</th>
+                                                <th class="text-right">최종 정산 금액 (원)</th>
+                                                <th class="text-right">세금계산서</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td class="font-semibold">매출 (입금금액(원))</td>
+                                                <td class="text-slate-500"></td>
+                                                <td class="text-right">{{ formatWon(settlementDetailData.revenueTotalKrw) }}</td>
+                                                <td class="text-right">{{ formatWon(settlementDetailData.revenueTotalKrw) }}</td>
+                                                <td class="text-right text-slate-400">-</td>
+                                            </tr>
+                                            <tr v-for="(fr, idx) in settlementDetailData.finalRows" :key="'fn-' + fr.name">
+                                                <td v-if="idx === 0" :rowspan="settlementDetailData.finalRows.length" class="font-semibold align-middle">수수료정산</td>
+                                                <td class="font-medium">{{ fr.name }}</td>
+                                                <td class="text-right">
+                                                    <template v-if="fr.hasOperating">
+                                                        <div class="flex justify-between gap-3"><span class="text-slate-500">광고 수수료</span><span>{{ formatWon(fr.adCommission) }}</span></div>
+                                                        <div class="flex justify-between gap-3"><span class="text-slate-500">운영 대행 수수료</span><span>{{ formatSettleDecimal(fr.operatingFee) }}</span></div>
+                                                    </template>
+                                                    <template v-else>{{ formatWon(fr.adCommission) }}</template>
+                                                </td>
+                                                <td class="text-right font-semibold">{{ formatWon(fr.amount) }}</td>
+                                                <td class="text-right">{{ formatWon(fr.taxInvoice) }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="font-semibold">서빙피</td>
+                                                <td class="font-medium">구글 서핑피</td>
+                                                <td class="text-right">{{ formatWon(settlementDetailData.servingFeeTotalKrw) }}</td>
+                                                <td class="text-right">{{ formatWon(settlementDetailData.servingFeeTotalKrw) }}</td>
+                                                <td class="text-right text-slate-400">-</td>
+                                            </tr>
+                                            <tr v-if="settlementDetailData.directCorrection !== null">
+                                                <td class="font-semibold">시냅스엠(직접)</td>
+                                                <td class="font-medium">
+                                                    {{ settlementDetailData.directCorrection >= 0 ? '잔여 수익' : '잔여 손실' }}
+                                                    <div class="text-slate-500 text-xs font-normal mt-1">입금금액 배분액 합계 보정(잔여)</div>
+                                                </td>
+                                                <td class="text-right">{{ formatWon(settlementDetailData.directCorrection) }}</td>
+                                                <td class="text-right">{{ formatWon(settlementDetailData.directCorrection) }}</td>
+                                                <td class="text-right text-slate-400">-</td>
+                                            </tr>
+                                            <tr class="synapse-row">
+                                                <td class="font-semibold" colspan="2">시냅스엠 수익 합계</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.synapseTotal) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(settlementDetailData.synapseTotal) }}</td>
+                                                <td></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p class="text-slate-500 text-xs mt-2 mb-0">
+                                        세금계산서 금액은 광고 수수료(최종 파트너 정산 금액) 기준 부가세 10% 포함 금액입니다. (운영 대행 수수료 제외)
+                                    </p>
+                                </div>
+                            </div>
+                        </template>
+                    </section>
+
+                    <!-- 월별 리포트 -->
+                    <section v-if="activePage === 'monthly-report'" class="section-card mb-4 report-root">
+                        <!-- 데이터 없음 -->
+                        <template v-if="!reportData">
+                            <div class="flex justify-between items-start flex-wrap gap-2 mb-3">
+                                <div>
+                                    <h2 class="text-lg font-bold text-slate-900 mb-1">월별 리포트</h2>
+                                    <p class="text-slate-500 m-0">월별 정산 결과를 기초로 한 리포트를 확인합니다.</p>
+                                </div>
+                            </div>
+                            <div class="text-center text-slate-500 py-10">
+                                <i data-lucide="bar-chart-3" class="block mx-auto mb-2 size-10"></i>
+                                <p class="mb-1">표시할 리포트가 없습니다.</p>
+                                <p class="text-xs mb-3">월별 정산 화면에서 마감된 정산의 <strong>월리포트</strong> 버튼을 눌러주세요.</p>
+                                <button type="button" class="btn btn-outline btn-sm" @click="navigate('monthly-settlement')">
+                                    <i data-lucide="arrow-right"></i>월별 정산으로 이동
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- 리포트 본문 -->
+                        <template v-else>
+                            <!-- 헤더 -->
+                            <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+                                <div>
+                                    <button type="button" class="btn-link text-sm mb-1 report-no-print" @click="navigate('monthly-settlement')">
+                                        <i data-lucide="arrow-left"></i>월별 정산으로
+                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <h2 class="text-lg font-bold text-slate-900 m-0">{{ reportMonth }} 월별 리포트</h2>
+                                        <span v-if="reportRecord && reportRecord.status === 'closed'" class="closed-chip">
+                                            <i data-lucide="lock"></i>마감
+                                        </span>
+                                    </div>
+                                    <p v-if="reportRecord" class="text-slate-500 text-xs mb-0 mt-1">
+                                        정산 일시: {{ formatSettledAt(reportRecord.settledAt) }}
+                                        <span v-if="reportData.meta.sourceRatioMonth"> · 적용 비율 기준: {{ reportData.meta.sourceRatioMonth }}</span>
+                                        <span v-if="reportData.meta.baseRate"> · 정산 기준환율: {{ formatWon(reportData.meta.baseRate) }}원</span>
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2 report-no-print">
+                                    <button type="button" class="btn btn-outline btn-sm" @click="printMonthlyReport">
+                                        <i data-lucide="printer"></i>인쇄 / PDF
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="reportData.meta.unassignedRevenueCount || reportData.meta.unassignedServingCount" class="note note-warning py-2 mb-3 report-no-print">
+                                <i data-lucide="triangle-alert"></i>
+                                <span>미할당 광고 단위가 있어 결과가 실제와 다를 수 있습니다 (수익 {{ reportData.meta.unassignedRevenueCount.toLocaleString() }}건 · 서빙피 {{ reportData.meta.unassignedServingCount.toLocaleString() }}건).</span>
+                            </div>
+
+                            <!-- KPI 요약 카드 -->
+                            <div class="report-kpi-grid mb-4">
+                                <div class="report-kpi-card">
+                                    <span class="report-kpi-label"><i data-lucide="layers"></i>매출 (입금금액)</span>
+                                    <span class="report-kpi-value">{{ formatWon(reportData.revenueTotalKrw) }}<small>원</small></span>
+                                </div>
+                                <div class="report-kpi-card">
+                                    <span class="report-kpi-label"><i data-lucide="server"></i>구글 서빙피</span>
+                                    <span class="report-kpi-value">{{ formatWon(reportData.servingFeeTotalKrw) }}<small>원</small></span>
+                                </div>
+                                <div class="report-kpi-card">
+                                    <span class="report-kpi-label"><i data-lucide="users"></i>파트너 지급 합계</span>
+                                    <span class="report-kpi-value">{{ formatWon(reportData.partnerPayoutTotal) }}<small>원</small></span>
+                                    <span class="report-kpi-sub">광고 수수료 {{ formatWon(reportData.totals.finalSettle) }} + 운영대행 {{ formatWon(reportData.operatingTotal) }}</span>
+                                </div>
+                                <div class="report-kpi-card is-primary">
+                                    <span class="report-kpi-label"><i data-lucide="trending-up"></i>시냅스엠 수익</span>
+                                    <span class="report-kpi-value">{{ formatWon(reportData.synapseTotal) }}<small>원</small></span>
+                                    <span class="report-kpi-sub">매출 대비 {{ formatSettlePercent(reportData.synapseMargin) }}</span>
+                                </div>
+                            </div>
+
+                            <!-- 정산 기준 정보 -->
+                            <div class="report-2col mb-4">
+                                <div class="report-block">
+                                    <h3 class="report-block-title"><i data-lucide="info"></i>정산 기준 정보</h3>
+                                    <div class="overflow-x-auto">
+                                        <table class="dtbl">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-left">항목</th>
+                                                    <th class="text-right">인보이스 금액 ($)</th>
+                                                    <th class="text-right">정산 금액 (원)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td class="font-medium">매출 (입금)</td>
+                                                    <td class="text-right">{{ formatUsd(reportData.summary.revenueUsd) }}</td>
+                                                    <td class="text-right font-semibold">{{ formatWon(reportData.summary.revenueKrw) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="font-medium">서빙피 (송금)</td>
+                                                    <td class="text-right">{{ formatUsd(reportData.summary.servingUsd) }}</td>
+                                                    <td class="text-right font-semibold">{{ formatWon(reportData.summary.servingKrw) }}</td>
+                                                </tr>
+                                                <tr class="total-row">
+                                                    <td class="font-semibold">기준환율</td>
+                                                    <td class="text-right text-slate-500">$1 =</td>
+                                                    <td class="text-right font-semibold">{{ formatWon(reportData.summary.baseRate) }}원</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="font-semibold">월별 서빙피 단가</td>
+                                                    <td class="text-slate-500 text-xs" colspan="2">
+                                                        <span v-if="reportData.summary.servingFeeUnitPrice != null">
+                                                            ${{ formatSettleDecimal(reportData.summary.servingFeeUnitPrice) }} / 1,000 노출
+                                                            <span v-if="reportData.summary.servingFeeMonth" class="text-slate-500">({{ reportData.summary.servingFeeMonth }} 기준)</span>
+                                                        </span>
+                                                        <span v-else>-</span>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="report-block">
+                                    <h3 class="report-block-title"><i data-lucide="percent"></i>파트너별 정산 수수료율</h3>
+                                    <div class="overflow-x-auto">
+                                        <table class="dtbl">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-left">파트너</th>
+                                                    <th class="text-right">매출 수수료율</th>
+                                                    <th class="text-right">서빙피 분담율</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr v-for="r in reportData.rows" :key="'rate-' + r.name">
+                                                    <td class="font-medium">{{ r.name }}</td>
+                                                    <td class="text-right">{{ r.salesCommission }}%</td>
+                                                    <td class="text-right">{{ r.servingFeeShare }}%</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 정산 구성 시각화 -->
+                            <div class="report-2col mb-4">
+                                <div class="report-block">
+                                    <h3 class="report-block-title"><i data-lucide="bar-chart-big"></i>핵심 지표 비교</h3>
+                                    <div class="report-compare">
+                                        <div v-for="c in reportData.compareItems" :key="'cmp-' + c.key" class="report-compare-row">
+                                            <span class="report-compare-label">{{ c.label }}</span>
+                                            <div class="report-compare-track">
+                                                <div class="report-compare-fill" :class="c.cls" :style="{ width: c.bar + '%' }"></div>
+                                            </div>
+                                            <span class="report-compare-val">{{ formatWon(c.value) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="report-block">
+                                    <h3 class="report-block-title"><i data-lucide="trending-up"></i>시냅스엠 수익 구성</h3>
+                                    <div class="report-flow">
+                                        <div class="report-flow-row">
+                                            <span class="report-flow-label">기본 수익</span>
+                                            <div class="report-flow-track"><div class="report-flow-fill is-base" :style="{ width: reportData.synapseFlow.baseBar + '%' }"></div></div>
+                                            <span class="report-flow-val">{{ formatWon(reportData.synapseFlow.base) }}</span>
+                                        </div>
+                                        <div class="report-flow-row">
+                                            <span class="report-flow-label">− 운영대행 수수료</span>
+                                            <div class="report-flow-track"><div class="report-flow-fill is-minus" :style="{ width: reportData.synapseFlow.operatingBar + '%' }"></div></div>
+                                            <span class="report-flow-val text-red-600">−{{ formatWon(reportData.synapseFlow.operating) }}</span>
+                                        </div>
+                                        <div class="report-flow-row is-result">
+                                            <span class="report-flow-label font-semibold">최종 시냅스엠 수익</span>
+                                            <div class="report-flow-track"><div class="report-flow-fill is-net" :style="{ width: reportData.synapseFlow.netBar + '%' }"></div></div>
+                                            <span class="report-flow-val font-bold">{{ formatWon(reportData.synapseFlow.net) }}</span>
+                                        </div>
+                                    </div>
+                                    <p class="text-slate-500 text-xs mt-2 mb-0">매출 대비 수익률 <strong>{{ formatSettlePercent(reportData.synapseMargin) }}</strong></p>
+                                </div>
+                            </div>
+
+                            <!-- 파트너별 정산 요약 -->
+                            <div class="report-block mb-4">
+                                <h3 class="report-block-title"><i data-lucide="users"></i>파트너별 정산 요약</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">파트너</th>
+                                                <th class="text-right">입금금액 배분액(원)</th>
+                                                <th class="text-right">서빙피 배분액(원)</th>
+                                                <th class="text-right">최종 파트너 정산 금액(원)</th>
+                                                <th class="report-bar-col text-left">정산 비중</th>
+                                                <th class="text-right bg-primary-50/50">시냅스엠 수익(원)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="r in reportData.partnerRows" :key="'rp-' + r.name">
+                                                <td class="font-medium">{{ r.name }}</td>
+                                                <td class="text-right">{{ formatWon(r.revenueAlloc) }}</td>
+                                                <td class="text-right">{{ formatWon(r.servingAlloc) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(r.finalSettle) }}</td>
+                                                <td class="report-bar-col">
+                                                    <div class="report-bar">
+                                                        <div class="report-bar-fill" :style="{ width: r.finalBar + '%' }"></div>
+                                                    </div>
+                                                    <span class="report-bar-pct">{{ r.finalShare.toFixed(1) }}%</span>
+                                                </td>
+                                                <td class="text-right cell-synapse">{{ formatWon(r.synapseBase) }}</td>
+                                            </tr>
+                                            <tr class="total-row">
+                                                <td class="font-semibold">합계</td>
+                                                <td class="text-right font-semibold">{{ formatWon(reportData.totals.revenueAlloc) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(reportData.totals.servingAlloc) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(reportData.totals.finalSettle) }}</td>
+                                                <td class="report-bar-col text-right font-semibold">100%</td>
+                                                <td class="text-right font-semibold">{{ formatWon(reportData.totals.synapseBase) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- 운영대행 수수료 -->
+                            <div v-if="reportData.operatingGroups.length" class="report-block mb-4">
+                                <h3 class="report-block-title"><i data-lucide="network"></i>운영대행 수수료</h3>
+                                <div v-for="g in reportData.operatingGroups" :key="'rop-' + g.charger" class="operating-card mb-3">
+                                    <div class="operating-head">
+                                        <span>운영대행 수수료 정산 <strong>({{ g.charger }})</strong></span>
+                                        <span class="operating-total">합계: <strong>{{ formatWon(g.total) }}원</strong></span>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="dtbl">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-left">구분</th>
+                                                    <th class="text-right">시냅스엠 수익(원)</th>
+                                                    <th class="text-right">운영대행 수수료율</th>
+                                                    <th class="text-right">운영대행 수수료액(원)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr v-for="t in g.targets" :key="'ropt-' + g.charger + '-' + t.name">
+                                                    <td class="font-medium">{{ t.name }}</td>
+                                                    <td class="text-right">{{ formatWon(t.synapseBase) }}</td>
+                                                    <td class="text-right">{{ t.rate }}%</td>
+                                                    <td class="text-right" :class="{ 'cell-muted': t.rate === 0 }">{{ formatSettleDecimal(t.fee) }}</td>
+                                                </tr>
+                                                <tr class="total-row">
+                                                    <td class="font-semibold" colspan="3">운영대행 수수료 합계</td>
+                                                    <td class="text-right font-semibold">{{ formatWon(g.total) }}원</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 최종 정산액 및 세금계산서 -->
+                            <div class="report-block mb-3">
+                                <h3 class="report-block-title"><i data-lucide="receipt"></i>최종 정산액 및 시냅스엠 수익</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">구분</th>
+                                                <th class="text-left">파트너</th>
+                                                <th class="text-right">금액 (원)</th>
+                                                <th class="text-right">최종 정산 금액 (원)</th>
+                                                <th class="text-right">세금계산서</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td class="font-semibold">매출 (입금금액(원))</td>
+                                                <td class="text-slate-500"></td>
+                                                <td class="text-right">{{ formatWon(reportData.revenueTotalKrw) }}</td>
+                                                <td class="text-right">{{ formatWon(reportData.revenueTotalKrw) }}</td>
+                                                <td class="text-right text-slate-400">-</td>
+                                            </tr>
+                                            <tr v-for="(fr, idx) in reportData.finalRows" :key="'rfn-' + fr.name">
+                                                <td v-if="idx === 0" :rowspan="reportData.finalRows.length" class="font-semibold align-middle">수수료정산</td>
+                                                <td class="font-medium">{{ fr.name }}</td>
+                                                <td class="text-right">
+                                                    <template v-if="fr.hasOperating">
+                                                        <div class="flex justify-between gap-3"><span class="text-slate-500">광고 수수료</span><span>{{ formatWon(fr.adCommission) }}</span></div>
+                                                        <div class="flex justify-between gap-3"><span class="text-slate-500">운영 대행 수수료</span><span>{{ formatSettleDecimal(fr.operatingFee) }}</span></div>
+                                                    </template>
+                                                    <template v-else>{{ formatWon(fr.adCommission) }}</template>
+                                                </td>
+                                                <td class="text-right font-semibold">{{ formatWon(fr.amount) }}</td>
+                                                <td class="text-right">{{ formatWon(fr.taxInvoice) }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="font-semibold">서빙피</td>
+                                                <td class="font-medium">구글 서핑피</td>
+                                                <td class="text-right">{{ formatWon(reportData.servingFeeTotalKrw) }}</td>
+                                                <td class="text-right">{{ formatWon(reportData.servingFeeTotalKrw) }}</td>
+                                                <td class="text-right text-slate-400">-</td>
+                                            </tr>
+                                            <tr class="synapse-row">
+                                                <td class="font-semibold" colspan="2">시냅스엠 수익 합계</td>
+                                                <td class="text-right font-semibold">{{ formatWon(reportData.synapseTotal) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(reportData.synapseTotal) }}</td>
+                                                <td></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p class="text-slate-500 text-xs mt-2 mb-0">
+                                    세금계산서 금액은 광고 수수료(최종 파트너 정산 금액) 기준 부가세 10% 포함 금액입니다. (운영 대행 수수료 제외)
+                                </p>
+                            </div>
+
+                            <!-- 파트너별 상세 정산 내역 -->
+                            <div class="report-block mb-3">
+                                <h3 class="report-block-title"><i data-lucide="clipboard-list"></i>파트너별 상세 정산 내역</h3>
+                                <div class="report-partner-grid">
+                                    <div v-for="pc in reportData.partnerCards" :key="'pcard-' + pc.name" class="report-partner-card">
+                                        <div class="report-partner-name">
+                                            <span>{{ pc.name }}</span>
+                                            <div class="flex gap-1 report-no-print">
+                                                <button type="button" class="btn btn-outline btn-sm" @click="openPartnerDetail(pc.name)">
+                                                    <i data-lucide="table"></i>정산상세
+                                                </button>
+                                                <button type="button" class="btn btn-outline btn-sm" @click="openMailForm(pc)">
+                                                    <i data-lucide="mail"></i>정산메일폼
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <table class="report-partner-table">
+                                            <tbody>
+                                                <tr>
+                                                    <th>매출 ($)</th>
+                                                    <td class="text-right" colspan="2">{{ formatUsd(pc.revenueUsd) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>서빙피 ($)</th>
+                                                    <td class="text-right" colspan="2">{{ formatUsd(pc.servingUsd) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th rowspan="2">매출 정산금액</th>
+                                                    <td class="report-partner-sub">{{ pc.salesCommission }}% 매출 정산 금액 ($)</td>
+                                                    <td class="text-right">{{ formatUsd(pc.commissionUsd) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="report-partner-sub">{{ pc.salesCommission }}% 매출 정산 금액 (원)</td>
+                                                    <td class="text-right font-semibold">{{ formatWon(pc.commissionKrw) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th rowspan="2">서빙피 분담금</th>
+                                                    <td class="report-partner-sub">{{ pc.servingFeeShare }}% 서빙피 분담금 ($)</td>
+                                                    <td class="text-right">{{ formatUsd(pc.servingShareUsd) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="report-partner-sub">{{ pc.servingFeeShare }}% 서빙피 분담금 (원)</td>
+                                                    <td class="text-right font-semibold">−{{ formatWon(pc.servingShareKrw) }}</td>
+                                                </tr>
+                                                <tr v-if="pc.operatingLines.length">
+                                                    <th>운영대행수수료</th>
+                                                    <td colspan="2">
+                                                        <div v-for="(ol, oi) in pc.operatingLines" :key="'ol-' + pc.name + '-' + oi" class="report-partner-op">
+                                                            <span>시냅스엠 수익의 {{ ol.rate }}% <span class="text-slate-500">{{ ol.names.join(', ') }}</span></span>
+                                                            <span class="report-partner-op-fee">+{{ formatWon(ol.fee) }}원</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                <tr class="report-partner-final">
+                                                    <th colspan="2">실 정산금액 (원)</th>
+                                                    <td class="text-right">{{ formatWon(pc.finalKrw) }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <p class="text-slate-500 text-xs mt-2 mb-0">
+                                    달러($) 금액은 인보이스 금액에 파트너별 비율을 적용한 값이며, 원(원) 금액은 기준환율로 환산한 실제 정산 금액입니다.
+                                </p>
+                            </div>
+                        </template>
+                    </section>
+
+                    <!-- 새로운 년월 추가 모달 -->
+                    <div v-if="settlementNewModalOpen" class="modal-backdrop" @click.self="closeSettlementNewModal">
+                        <div class="modal-dialog max-w-md">
+                            <div class="modal-header">
+                                <h5>새로운 년월 정산하기</h5>
+                                <button type="button" class="modal-close" @click="closeSettlementNewModal" aria-label="닫기"><i data-lucide="x"></i></button>
+                            </div>
+                            <div class="modal-body">
+                                <label class="label" for="settlementNewMonth">정산 년월</label>
+                                <input id="settlementNewMonth" type="month" class="select" v-model="settlementNewMonth">
+                                <p class="text-slate-500 text-xs mt-2 mb-0">선택한 년월을 정산 목록에 추가합니다. 추가 후 목록에서 "정산하기"를 실행하세요.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline btn-sm" @click="closeSettlementNewModal">취소</button>
+                                <button type="button" class="btn btn-primary btn-sm" @click="addSettlementMonth">목록에 추가</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 파트너별 정산 상세 모달 -->
+                    <div v-if="partnerDetailOpen && partnerDetailData" class="modal-backdrop" @click.self="closePartnerDetail">
+                        <div class="modal-dialog max-w-4xl">
+                            <div class="modal-header">
+                                <h5><i data-lucide="table"></i>{{ reportMonth }} · {{ partnerDetailData.name }} 정산 상세</h5>
+                                <button type="button" class="modal-close" @click="closePartnerDetail" aria-label="닫기"><i data-lucide="x"></i></button>
+                            </div>
+                            <div class="modal-body">
+                                <!-- 1. 광고 매출 수수료 정산 -->
+                                <h6 class="text-sm font-bold text-slate-900 mb-2">광고 매출 수수료 정산</h6>
+                                <div class="overflow-x-auto mb-3">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">구분</th>
+                                                <th class="text-right" v-if="partnerDetailData.name === '중앙일보'">Ad Exchange 수익 합(원)</th>
+                                                <th class="text-right" v-else>입금금액 배분액(원)</th>
+                                                <th class="text-right" v-if="partnerDetailData.name === '중앙일보'">정산 비율</th>
+                                                <th class="text-right" v-if="partnerDetailData.name !== '중앙일보'">서빙피 배분액(원)</th>
+                                                <th class="text-right" v-if="partnerDetailData.name !== '중앙일보'">수익 비율</th>
+                                                <th class="text-right" v-if="partnerDetailData.name !== '중앙일보'">서빙피 비율</th>
+                                                <th class="text-right">수수료 적용<br>정산 금액(원)</th>
+                                                <th class="text-right" v-if="partnerDetailData.name !== '중앙일보'">서빙피<br>분담액(원)</th>
+                                                <th class="text-right">최종 파트너<br>정산 금액(원)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td class="font-medium">{{ partnerDetailData.row.name }}</td>
+                                                <td class="text-right cell-base">{{ formatWon(partnerDetailData.row.revenueAlloc) }}</td>
+                                                <td class="text-right cell-ratio" v-if="partnerDetailData.name === '중앙일보'">{{ partnerDetailData.row.salesCommission }}%</td>
+                                                <td class="text-right cell-base" v-if="partnerDetailData.name !== '중앙일보'">{{ formatWon(partnerDetailData.row.servingAlloc) }}</td>
+                                                <td class="text-right cell-ratio" v-if="partnerDetailData.name !== '중앙일보'">{{ formatSettlePercent(partnerDetailData.row.revRatio) }}</td>
+                                                <td class="text-right cell-ratio" v-if="partnerDetailData.name !== '중앙일보'">{{ formatSettlePercent(partnerDetailData.row.srvRatio) }}</td>
+                                                <td class="text-right">{{ formatWon(partnerDetailData.row.commissionSettle) }}</td>
+                                                <td class="text-right" v-if="partnerDetailData.name !== '중앙일보'">{{ formatWon(partnerDetailData.row.servingShare) }}</td>
+                                                <td class="text-right font-semibold">{{ formatWon(partnerDetailData.row.finalSettle) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- 2. 운영대행 수수료 정산 (내역이 있을 때만 표시) -->
+                                <template v-if="partnerDetailData.operatingGroup">
+                                <h6 class="text-sm font-bold text-slate-900 mb-2">운영대행 수수료 정산</h6>
+                                <div class="overflow-x-auto mb-3">
+                                    <table class="dtbl">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">구분</th>
+                                                <th class="text-right">시냅스엠 수익(원)</th>
+                                                <th class="text-right">운영대행 수수료율</th>
+                                                <th class="text-right">운영대행 수수료액(원)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="t in partnerDetailData.operatingGroup.targets" :key="'pd-op-' + t.name">
+                                                <td class="font-medium">{{ t.name }}</td>
+                                                <td class="text-right">{{ formatWon(t.synapseBase) }}</td>
+                                                <td class="text-right">{{ t.rate }}%</td>
+                                                <td class="text-right" :class="{ 'cell-muted': t.rate === 0 }">{{ formatSettleDecimal(t.fee) }}</td>
+                                            </tr>
+                                            <tr class="total-row">
+                                                <td class="font-semibold" colspan="3">운영대행 수수료 합계</td>
+                                                <td class="text-right font-semibold">{{ formatWon(partnerDetailData.operatingGroup.total) }}원</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                </template>
+
+                                <!-- 3. 최종 정산액 -->
+                                <h6 class="text-sm font-bold text-slate-900 mb-2">최종정산액</h6>
+                                <div class="overflow-x-auto">
+                                    <table class="dtbl" v-if="partnerDetailData.finalRow">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-left">구분</th>
+                                                <th class="text-right" v-if="partnerDetailData.name !== '중앙일보'">금액(원)</th>
+                                                <th class="text-right">최종 정산 금액(원)</th>
+                                                <th class="text-right">세금계산서</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td class="font-medium">수수료 정산</td>
+                                                <td class="text-right" v-if="partnerDetailData.name !== '중앙일보'">
+                                                    <template v-if="partnerDetailData.finalRow.hasOperating">
+                                                        <div class="flex justify-between gap-3"><span class="text-slate-500">광고 수수료</span><span>{{ formatWon(partnerDetailData.finalRow.adCommission) }}</span></div>
+                                                        <div class="flex justify-between gap-3"><span class="text-slate-500">운영 대행 수수료</span><span>{{ formatSettleDecimal(partnerDetailData.finalRow.operatingFee) }}</span></div>
+                                                    </template>
+                                                    <template v-else>{{ formatWon(partnerDetailData.finalRow.adCommission) }}</template>
+                                                </td>
+                                                <td class="text-right font-semibold">{{ formatWon(partnerDetailData.finalRow.amount) }}</td>
+                                                <td class="text-right">{{ formatWon(partnerDetailData.finalRow.taxInvoice) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p class="text-slate-500 text-xs mt-2 mb-0">
+                                        세금계산서 금액은 광고 수수료(최종 파트너 정산 금액) 기준 부가세 10% 포함 금액입니다. (운영 대행 수수료 제외)
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline btn-sm" @click="closePartnerDetail">닫기</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 정산 메일폼 모달 -->
+                    <div v-if="mailFormOpen && mailFormCard" class="modal-backdrop" @click.self="closeMailForm">
+                        <div class="modal-dialog max-w-2xl">
+                            <div class="modal-header">
+                                <h5><i data-lucide="mail"></i>{{ mailFormCard.name }} 정산 메일폼</h5>
+                                <button type="button" class="modal-close" @click="closeMailForm" aria-label="닫기"><i data-lucide="x"></i></button>
+                            </div>
+                            <div class="modal-body">
+                                <!-- 메일 내용 -->
+                                <div class="mb-4">
+                                    <div class="flex items-center justify-between gap-2 mb-2">
+                                        <span class="text-sm font-semibold text-slate-700 inline-flex items-center gap-1"><i data-lucide="file-text"></i>메일 내용</span>
+                                        <button type="button" class="btn btn-outline btn-sm" @click="copyMailText">
+                                            <i data-lucide="clipboard"></i>복사
+                                        </button>
+                                    </div>
+                                    <textarea v-model="mailFormText" class="textarea font-mono text-[13px]" rows="16"></textarea>
+                                    <p class="text-slate-500 text-xs mt-1 mb-0">필요한 내용을 수정한 뒤 복사하여 사용하세요.</p>
+                                </div>
+
+                                <!-- 정산자료 다운로드 -->
+                                <div>
+                                    <div class="flex items-center justify-between gap-2 mb-2">
+                                        <span class="text-sm font-semibold text-slate-700 inline-flex items-center gap-1"><i data-lucide="download"></i>정산자료 다운로드</span>
+                                    </div>
+                                    <p class="text-slate-500 text-xs mb-2">{{ mailFormCard.name }}에 할당된 자료만 엑셀로 내려받습니다.</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-success btn-sm" @click="exportPartnerRevenueExcel(mailFormCard.name)">
+                                            <i data-lucide="file-spreadsheet"></i>광고수익총금액 엑셀로 다운받기
+                                        </button>
+                                        <button v-if="mailFormCard.hasServing" type="button" class="btn btn-success btn-sm" @click="exportPartnerServingExcel(mailFormCard.name)">
+                                            <i data-lucide="file-spreadsheet"></i>서빙피 자료 엑셀로 다운받기
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline btn-sm" @click="closeMailForm">닫기</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- SheetJS (xlsx export) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- API 어댑터 (gs-utils 보다 먼저: window.GS_CACHE / window.GSApi 제공) -->
+    <script src="/js/gs-api.js"></script>
+
+    <!-- App utilities (window.GS) -->
+    <script src="/js/gs-utils.js"></script>
+
+    <script>
+        (async () => {
+            try {
+                await window.GSApi.hydrate();   // /api/bootstrap → window.GS_CACHE 적재
+            } catch (e) {
+                console.error('[gs] 서버 데이터 로드 실패:', e);
+                alert('서버에서 데이터를 불러오지 못했습니다. 서버(npm start)가 실행 중인지 확인하세요.\n' + (e.message || e));
+            }
+            Vue.createApp(window.GSApp).mount('#app');
+        })();
+    </script>
+</body>
+</html>

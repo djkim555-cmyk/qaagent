@@ -1,0 +1,129 @@
+<div class="page-head">
+  <div>
+    <div class="crumb">기본 시드 풀 · 한국 인구통계 분포</div>
+    <h1>페르소나 시드 ({{ personas.length }}인)</h1>
+  </div>
+  <button v-if="isSuper" class="btn btn-primary btn-lg" @click="openAdd"><i data-lucide="sparkles"></i> 페르소나 추가</button>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  <div class="card stat"><div class="card-body"><div class="num">{{ g('남') }} · {{ g('여') }}</div><div class="lbl">성별 (남 · 여)</div></div></div>
+  <div class="card stat"><div class="card-body"><div class="num">{{ r('수도권') }}</div><div class="lbl">수도권 (비수도권 {{ r('비수도권') }})</div></div></div>
+  <div class="card stat mint"><div class="card-body"><div class="num">{{ lit('하') }}</div><div class="lbl">저친숙(하) 포함</div></div></div>
+  <div class="card stat"><div class="card-body"><div class="num">{{ accTotal }}</div><div class="lbl">접근성 특성 보유</div></div></div>
+</div>
+
+<div class="grid lg:grid-cols-3 gap-3 mt-3">
+  <div class="card"><div class="card-body">
+    <div class="card-h">연령대</div>
+    <div v-for="[k, v] in ageRows" :key="k" class="mb-2">
+      <div class="small flex justify-between"><span>{{ k }}</span><span class="muted num-tab">{{ v }}명 · {{ pct(v) }}%</span></div>
+      <div class="bar"><i :style="{ width: pct(v) + '%' }"></i></div>
+    </div>
+  </div></div>
+  <div class="card"><div class="card-body">
+    <div class="card-h">디지털 친숙도</div>
+    <div v-for="[k, v] in litRows" :key="k" class="mb-2">
+      <div class="small flex justify-between"><span>{{ k }}</span><span class="muted num-tab">{{ v }}명 · {{ pct(v) }}%</span></div>
+      <div class="bar"><i :style="{ width: pct(v) + '%' }"></i></div>
+    </div>
+  </div></div>
+  <div class="card"><div class="card-body">
+    <div class="card-h">주 사용기기 · 접근성</div>
+    <div v-for="[k, v] in devRows" :key="k" class="mb-2">
+      <div class="small flex justify-between"><span>{{ k }}</span><span class="muted num-tab">{{ v }}명 · {{ pct(v) }}%</span></div>
+      <div class="bar"><i :style="{ width: pct(v) + '%' }"></i></div>
+    </div>
+    <div class="small muted mt-2 flex flex-wrap gap-1">
+      <span v-for="[k, v] in accRows" :key="k" class="badge">{{ k }} {{ v }}</span>
+    </div>
+  </div></div>
+</div>
+
+<div class="card mt-3"><div class="card-body">
+  <div class="card-h mb-1">{{ meta.description || '기본 페르소나 시드' }}</div>
+  <div class="small muted mb-3">근거: {{ meta.calibration ? meta.calibration.source : '' }}</div>
+
+  <div class="grid md:grid-cols-12 gap-2 items-end mb-3">
+    <div class="md:col-span-4"><label class="label">검색 (이름·직업·도시·발화)</label><input class="input" v-model="q" placeholder="예: 농업, 노안, 서울…" /></div>
+    <div class="md:col-span-2"><label class="label">연령대</label><select class="select" v-model="fAge"><option value="">전체</option><option v-for="[k] in ageRows" :key="k">{{ k }}</option></select></div>
+    <div class="md:col-span-2"><label class="label">친숙도</label><select class="select" v-model="fLit"><option value="">전체</option><option>상</option><option>중</option><option>하</option></select></div>
+    <div class="md:col-span-2"><label class="label">기기</label><select class="select" v-model="fDev"><option value="">전체</option><option>모바일</option><option>PC</option><option>둘다</option></select></div>
+    <div class="md:col-span-2"><label class="label">접근성</label><select class="select" v-model="fAcc"><option value="">전체</option><option>노안</option><option>저시력</option><option>색약</option></select></div>
+  </div>
+
+  <div class="small muted mb-2">{{ filtered.length }} / {{ personas.length }}명 표시</div>
+  <div class="overflow-x-auto -mx-5">
+    <table class="tbl">
+      <thead><tr><th>ID</th><th>이름</th><th>나이</th><th>성별</th><th>지역·도시</th><th>직업</th><th>친숙도</th><th>기기</th><th>접근성</th><th>한 줄</th></tr></thead>
+      <tbody>
+        <tr v-for="p in filtered" :key="p.id">
+          <td class="small muted">{{ p.id }}</td>
+          <td class="font-medium text-slate-900">{{ p.name }}</td>
+          <td class="num-tab">{{ p.age }}</td>
+          <td class="small">{{ p.gender }}</td>
+          <td class="small">{{ p.region }} · {{ p.city }}</td>
+          <td class="small muted">{{ p.occupation }}</td>
+          <td><span class="badge">{{ p.digitalLiteracy }}</span></td>
+          <td class="small">{{ p.primaryDevice }}</td>
+          <td class="small muted">{{ (p.accessibility || []).join(', ') || '—' }}</td>
+          <td class="small muted">{{ p.quote }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div></div>
+
+<!-- AI 대화형 페르소나 추가 모달 (최고관리자 전용) -->
+<div v-if="showAdd" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeAdd">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-5xl bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl flex flex-col h-[85vh]" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">AI로 페르소나 만들기 <span class="small muted font-normal">— 대화하며 1명 구성</span></h2>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-primary btn-sm" @click="save" :disabled="!persona || saving"><i data-lucide="user-plus"></i> {{ saving ? '추가 중…' : '리스트에 추가' }}</button>
+        <button class="icon-btn" @click="closeAdd" aria-label="닫기"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 flex-1 overflow-hidden">
+      <!-- 좌: 페르소나 초안 미리보기 -->
+      <div class="flex flex-col overflow-hidden ring-1 ring-inset ring-slate-200 rounded-lg p-4">
+        <div class="card-h">초안 미리보기 <span class="muted small">{{ savedTag }}</span></div>
+        <div v-if="!persona" class="muted flex-1 overflow-auto">오른쪽에서 AI와 대화를 시작하면 페르소나 초안이 여기에 실시간으로 표시됩니다. 예: "60대 초반, 저시력 어르신, 스마트폰만 쓰는 분"</div>
+        <div v-else class="flex-1 overflow-auto pr-1.5">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-base font-bold text-slate-900">{{ persona.name || '(이름 미정)' }}</span>
+            <span class="badge">{{ persona.digitalLiteracy || '?' }}</span>
+            <span v-for="a in (persona.accessibility || [])" :key="a" class="badge reco-yellow">{{ a }}</span>
+          </div>
+          <table class="tbl">
+            <tbody>
+              <tr><td class="small muted w-24">나이·연령대</td><td class="small num-tab">{{ persona.age }} · {{ persona.ageBand }}</td></tr>
+              <tr><td class="small muted">성별</td><td class="small">{{ persona.gender }}</td></tr>
+              <tr><td class="small muted">지역·도시</td><td class="small">{{ persona.region }} · {{ persona.city }}</td></tr>
+              <tr><td class="small muted">직업</td><td class="small">{{ persona.occupation }}</td></tr>
+              <tr><td class="small muted">주 사용기기</td><td class="small">{{ persona.primaryDevice }}</td></tr>
+              <tr><td class="small muted align-top">목표</td><td class="small">{{ persona.goals }}</td></tr>
+              <tr><td class="small muted align-top">성향</td><td class="small">{{ persona.personality }}</td></tr>
+              <tr><td class="small muted align-top">기술 행동</td><td class="small">{{ persona.techBehavior }}</td></tr>
+              <tr><td class="small muted align-top">불편 트리거</td><td class="small">{{ (persona.frustrationTriggers || []).join(', ') }}</td></tr>
+              <tr><td class="small muted align-top">한 줄</td><td class="small italic">{{ persona.quote }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- 우: AI 대화 -->
+      <div class="flex flex-col overflow-hidden">
+        <div class="card-h">AI와 대화</div>
+        <div class="flex-1 overflow-auto flex flex-col gap-2.5 px-0.5 py-1" ref="chat">
+          <div v-for="(b, i) in bubbles" :key="i" class="msg" :class="b.cls">{{ b.text }}</div>
+        </div>
+        <div v-if="err" class="text-red-600 small mt-2">{{ err }}</div>
+        <div class="flex gap-2 items-end mt-2.5 border-t border-slate-200 pt-2.5">
+          <textarea class="textarea resize-none" rows="2" v-model="draft" @keydown="onKey" placeholder="예: 농사짓는 60대 어르신, 노안 있고 스마트폰만 씀. 글자 작으면 답답해함. (Ctrl+Enter 전송)"></textarea>
+          <button class="btn btn-primary" @click="send" :disabled="sending"><i data-lucide="send"></i> 보내기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

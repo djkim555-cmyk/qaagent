@@ -1,0 +1,107 @@
+<div class="crumb"><a href="#/projects">프로젝트</a> › {{ project.name }}</div>
+<div class="ptabs">
+  <a :href="'#/project-overview?id=' + id">개요</a>
+  <a :href="'#/project-personas?id=' + id">페르소나</a>
+  <a :href="'#/project-runs?id=' + id">시나리오·실행</a>
+  <a :href="'#/project-qa?id=' + id">QA 리스트</a>
+  <a class="active" :href="'#/project-settings?id=' + id">설정</a>
+</div>
+
+<div class="page-head"><h1>대상 설정</h1></div>
+
+<div class="card accent max-w-[620px]"><div class="card-body">
+  <div class="card-h">프로젝트 정보</div>
+  <form @submit.prevent="save">
+    <label class="label">서비스명</label>
+    <input class="input" :class="errors.name ? 'mb-1 ring-red-500/60' : 'mb-3'" v-model="form.name" @input="errors.name = ''" />
+    <div v-if="errors.name" class="text-red-600 small mb-3">{{ errors.name }}</div>
+    <label class="label">대상 URL (baseUrl)</label>
+    <input class="input" type="url" inputmode="url" :class="errors.baseUrl ? 'mb-1 ring-red-500/60' : 'mb-3'" v-model="form.baseUrl" @input="errors.baseUrl = ''" />
+    <div v-if="errors.baseUrl" class="text-red-600 small mb-3">{{ errors.baseUrl }}</div>
+    <label class="label">플랫폼</label>
+    <select class="select mb-3" v-model="form.platform">
+      <option value="web">Web</option>
+      <option value="app">App(웹뷰)</option>
+    </select>
+    <label class="label">설명</label>
+    <textarea class="textarea mb-3" rows="2" v-model="form.description"></textarea>
+    <template v-if="role === 'super'">
+      <label class="label">담당 프로젝트 관리자</label>
+      <select class="select mb-3" v-model="form.managerId">
+        <option value="">미배정 (최고관리자만 표시)</option>
+        <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
+      </select>
+    </template>
+    <label class="label">금지 행위 / 영역 (guards, 줄바꿈 구분)</label>
+    <textarea class="textarea" rows="3" v-model="form.guards" placeholder="실제 결제 최종 승인&#10;데이터 영구 삭제&#10;/admin"></textarea>
+    <div class="rounded-lg bg-amber-50 ring-1 ring-inset ring-amber-200 p-3.5 flex gap-2.5 mt-3">
+      <i data-lucide="triangle-alert" class="text-amber-600 shrink-0 mt-0.5"></i>
+      <div class="small text-amber-800">페르소나 테스터가 절대 수행하지 않을 비가역 행위·금지 경로입니다.</div>
+    </div>
+    <div class="flex items-center gap-3 mt-4">
+      <button class="btn btn-primary" type="submit" :disabled="saving"><i data-lucide="check"></i> 저장</button>
+      <span v-if="savedMsg" class="text-mint small">{{ savedMsg }}</span>
+    </div>
+  </form>
+</div></div>
+
+<!-- 담당자 관리 (프로젝트별) -->
+<div class="card max-w-[620px] mt-3"><div class="card-body">
+  <div class="card-h">담당자 관리</div>
+  <p class="small muted">이 프로젝트의 QA 이슈를 배정할 담당자 목록입니다. 프로젝트마다 별도로 관리됩니다.</p>
+  <div v-if="!developers.length" class="empty">등록된 담당자가 없습니다. 아래에서 추가하세요.</div>
+  <div v-else class="overflow-x-auto -mx-5">
+    <table class="tbl">
+      <tbody>
+        <tr v-for="d in developers" :key="d.id">
+          <td class="font-bold text-slate-900">{{ d.name }}</td>
+          <td class="small muted">{{ d.email || '' }}</td>
+          <td class="text-right"><button class="btn btn-danger-outline btn-sm" @click="openDelete(d)"><i data-lucide="trash-2"></i> 삭제</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="flex items-end gap-2 mt-3">
+    <div class="flex-1"><input class="input" v-model="dName" placeholder="이름" @keydown.enter="addDev" /></div>
+    <div class="flex-1"><input class="input" v-model="dEmail" placeholder="이메일(선택)" @keydown.enter="addDev" /></div>
+    <button class="btn btn-primary" @click="addDev" :disabled="devSaving"><i data-lucide="plus"></i> 추가</button>
+  </div>
+  <div v-if="devErr" class="text-red-600 small mt-2">{{ devErr }}</div>
+</div></div>
+
+<!-- 담당자 삭제 — 이중 컨펌 팝업 -->
+<div v-if="showDelete" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDelete">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-md bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">
+        <span v-if="delStage === 1">담당자 삭제</span>
+        <span v-else>정말 삭제할까요?</span>
+      </h2>
+      <button class="icon-btn" @click="closeDelete" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <div class="px-5 py-4">
+      <template v-if="delStage === 1">
+        <p class="text-sm text-slate-700 m-0"><span class="font-semibold text-slate-900">{{ delTarget && delTarget.name }}</span> 담당자를 삭제하시겠어요?</p>
+        <p class="small muted mt-2">이미 배정된 이슈의 담당자 표시는 유지될 수 있으나, 이후 배정 목록에서는 제외됩니다.</p>
+      </template>
+      <template v-else>
+        <div class="flex items-start gap-2.5 rounded-md bg-red-50 ring-1 ring-inset ring-red-500/20 px-3 py-2.5">
+          <i data-lucide="triangle-alert" class="size-4 text-red-600 mt-0.5"></i>
+          <p class="text-sm text-red-700 m-0">이 작업은 되돌릴 수 없습니다. <span class="font-semibold">{{ delTarget && delTarget.name }}</span> 을(를) 삭제하려면 한 번 더 확인해 주세요.</p>
+        </div>
+      </template>
+      <div v-if="delErr" class="text-red-600 small mt-3">{{ delErr }}</div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+      <template v-if="delStage === 1">
+        <button class="btn btn-outline" type="button" @click="closeDelete">취소</button>
+        <button class="btn btn-danger-outline" type="button" @click="delStage = 2"><i data-lucide="trash-2"></i> 삭제 진행</button>
+      </template>
+      <template v-else>
+        <button class="btn btn-outline" type="button" @click="delStage = 1">뒤로</button>
+        <button class="btn btn-danger" type="button" :disabled="delSaving" @click="confirmDelete"><i data-lucide="trash-2"></i> 삭제 확정</button>
+      </template>
+    </div>
+  </div>
+</div>

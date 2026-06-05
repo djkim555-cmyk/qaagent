@@ -1,0 +1,61 @@
+<div class="crumb"><a href="#/projects">프로젝트</a> › {{ project.name }}</div>
+<div class="ptabs">
+  <a :href="'#/project-overview?id=' + id">개요</a>
+  <a :href="'#/project-personas?id=' + id">페르소나</a>
+  <a class="active" :href="'#/project-runs?id=' + id">시나리오·실행</a>
+  <a :href="'#/project-qa?id=' + id">QA 리스트</a>
+  <a :href="'#/project-settings?id=' + id">설정</a>
+</div>
+
+<div class="page-head">
+  <div>
+    <div class="crumb">
+      <a href="#/projects">프로젝트</a> ›
+      <a :href="'#/project-overview?id=' + id">{{ project.name }}</a> ›
+      <a :href="'#/project-runs?id=' + id">{{ scenarioName }}</a>
+    </div>
+    <h1>{{ scenarioName }}</h1>
+  </div>
+  <div class="flex items-center gap-2">
+    <span class="badge">{{ statusText }}</span>
+    <button v-if="isActive" class="btn btn-outline btn-sm text-red-600 ring-red-200 hover:bg-red-50" @click="cancelRun" :disabled="cancelling"><i data-lucide="square"></i> {{ cancelling ? '중단 중…' : '중단하기' }}</button>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+  <div>
+    <div class="card accent"><div class="card-body">
+      <div class="card-h">진행 상황</div>
+      <div class="log">
+        <div v-for="(e, i) in logs" :key="i" class="ev" :class="e.level"><span class="t">{{ e.t }}</span>{{ e.message }}</div>
+      </div>
+    </div></div>
+  </div>
+  <div>
+    <div class="card"><div class="card-body">
+      <div class="card-h">구조화 이슈 <span class="muted small">{{ issuesSummary }}</span></div>
+      <div v-if="!issues.length" class="muted">{{ issuesLoaded ? '기록된 이슈 없음' : '—' }}</div>
+      <div v-else class="overflow-x-auto -mx-5">
+        <table class="tbl">
+          <thead><tr><th>심각도</th><th>유형</th><th>제목</th><th>페르소나</th><th>신뢰</th></tr></thead>
+          <tbody>
+            <tr v-for="(i, idx) in issues" :key="idx">
+              <td><span class="badge" :class="'sev-' + i.severity">{{ i.severity || '-' }}</span></td>
+              <td class="small">{{ i.type || '' }}</td>
+              <td>{{ i.title || '' }}</td>
+              <td class="small muted">{{ i.persona_id || '' }}</td>
+              <td class="small"><span v-if="i.confidence === '추정'" class="muted">[추정]</span><span v-else-if="i.evidence">증거✓</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <a class="btn btn-outline btn-sm mt-2" :href="'#/project-qa?id=' + id">QA 리스트에서 구분·담당자 배정 <i data-lucide="chevron-right"></i></a>
+    </div></div>
+  </div>
+</div>
+
+<div class="card mt-3"><div class="card-body">
+  <div class="card-h">통합 리포트</div>
+  <div v-if="reportHtml" class="report" v-html="reportHtml"></div>
+  <div v-else class="report muted">{{ reportMsg }}</div>
+</div></div>

@@ -1,0 +1,72 @@
+<div class="page-head">
+  <h1>대시보드</h1>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  <div class="card stat"><div class="card-body"><div class="num">{{ stats.active }}</div><div class="lbl">진행 중 실행</div></div></div>
+  <div class="card stat"><div class="card-body"><div class="num text-red-600">{{ stats.openP1 }}</div><div class="lbl">미해결 P1 (Blocker·Major)</div></div></div>
+  <div class="card stat"><div class="card-body"><div class="num">{{ stats.thisWeek }}</div><div class="lbl">이번 주 실행</div></div></div>
+  <div class="card stat mint"><div class="card-body"><div class="num">{{ stats.projects }}</div><div class="lbl">{{ role === 'super' ? '전체 프로젝트' : '담당 프로젝트' }}</div></div></div>
+</div>
+
+<!-- 담당 프로젝트 (로그인한 관리자에게 할당된 프로젝트 / 최고관리자는 전체) -->
+<div class="mt-5">
+  <div class="card-h mb-3">{{ role === 'super' ? '전체 프로젝트' : '담당 프로젝트' }} ({{ projects.length }})</div>
+
+  <div v-if="loaded && !projects.length" class="card"><div class="card-body empty">
+    {{ role === 'super' ? '등록된 프로젝트가 없습니다.' : '아직 할당된 프로젝트가 없습니다. 최고관리자에게 프로젝트 배정을 요청하세요.' }}
+    <a href="#/projects" class="text-mint font-medium">프로젝트 화면</a>에서 확인할 수 있습니다.
+  </div></div>
+
+  <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <div v-for="p in projects" :key="p.id" class="card cursor-pointer hover:shadow-md transition" @click="openProject(p)">
+      <div class="card-body">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-bold text-slate-900 truncate">{{ p.name }}</div>
+            <div class="small muted truncate">{{ p.baseUrl }}</div>
+          </div>
+          <span v-if="p.openP1 > 0" class="badge reco-red shrink-0">미해결 P1 {{ p.openP1 }}</span>
+        </div>
+
+        <div class="flex items-center gap-4 mt-3">
+          <div><span class="num-tab font-bold text-slate-900">{{ p.runs }}</span> <span class="small muted">실행</span></div>
+          <div v-if="p.activeRuns > 0"><span class="num-tab font-bold text-mint">{{ p.activeRuns }}</span> <span class="small muted">진행중</span></div>
+          <div v-if="role === 'super' && p.managerName" class="small muted ml-auto inline-flex items-center gap-1"><i data-lucide="user" class="size-3"></i> {{ p.managerName }}</div>
+        </div>
+
+        <div class="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 small">
+          <template v-if="p.lastRun">
+            <span class="muted">최근 실행</span>
+            <span class="badge">{{ statusLabel(p.lastRun.status) }}</span>
+            <span v-if="p.lastRun.launchRecommendation" class="badge" :class="recoClass(p.lastRun.launchRecommendation)">{{ p.lastRun.launchRecommendation }}</span>
+            <span class="muted num-tab ml-auto">{{ fmtDateTime(p.lastRun.startedAt) }}</span>
+          </template>
+          <span v-else class="muted">실행 이력 없음</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card accent mt-5">
+  <div class="card-body">
+    <div class="card-h">최근 실행</div>
+    <div v-if="loaded && !stats.recent.length" class="empty">아직 실행 이력이 없습니다. <a href="#/projects" class="text-mint font-medium">프로젝트</a>를 만들고 QA를 실행해 보세요.</div>
+    <div v-else-if="stats.recent.length" class="overflow-x-auto -mx-5">
+      <table class="tbl">
+        <thead><tr><th>프로젝트</th><th>시나리오</th><th>상태</th><th>출시권고</th><th>P1</th><th>시작</th></tr></thead>
+        <tbody>
+          <tr v-for="r in stats.recent" :key="r.id" class="row-link" @click="openRun(r)">
+            <td class="font-medium text-slate-900">{{ r.project_name || '—' }}</td>
+            <td class="small muted">{{ (r.scenario || '').replace('scenarios/', '') }}</td>
+            <td><span class="badge">{{ statusLabel(r.status) }}</span></td>
+            <td><span v-if="r.launch_recommendation" class="badge" :class="recoClass(r.launch_recommendation)">{{ r.launch_recommendation }}</span><span v-else class="muted">-</span></td>
+            <td class="num-tab">{{ r.p1_count == null ? '-' : r.p1_count }}</td>
+            <td class="small muted num-tab">{{ fmtDateTime(r.started_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

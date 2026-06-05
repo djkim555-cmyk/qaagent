@@ -1,0 +1,131 @@
+<div class="page-head">
+  <div class="flex items-center gap-3 flex-wrap">
+    <h1>프로젝트</h1>
+    <div class="relative w-64 max-w-full">
+      <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none"></i>
+      <input class="input pl-9 pr-8" v-model="q" type="search" placeholder="서비스명·URL·담당자 검색" aria-label="프로젝트 검색" />
+      <button v-if="q" class="icon-btn absolute right-1 top-1/2 -translate-y-1/2 size-6" @click="q = ''" aria-label="검색어 지우기"><i data-lucide="x" class="size-3.5"></i></button>
+    </div>
+  </div>
+  <button class="btn btn-primary btn-lg" @click="openCreate"><i data-lucide="plus"></i> 새 프로젝트</button>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <div class="card-h mb-0">등록된 프로젝트 (<span v-if="q">{{ filtered.length }}/</span>{{ visible.length }})</div>
+      <button v-if="hidden.length" class="btn btn-outline btn-sm" @click="toggleHidden">
+        <i data-lucide="eye-off"></i> 숨기기 해제 <span class="badge ml-1">{{ hidden.length }}</span>
+      </button>
+    </div>
+    <div v-if="loaded && !projects.length" class="empty">
+      <div class="mb-3">아직 등록된 프로젝트가 없습니다.</div>
+      <button class="btn btn-primary" @click="openCreate"><i data-lucide="plus"></i> 첫 프로젝트 등록</button>
+    </div>
+    <div v-else-if="loaded && q && !filtered.length" class="empty">
+      <div class="mb-3">"{{ q }}"에 해당하는 프로젝트가 없습니다.</div>
+      <button class="btn btn-outline btn-sm" @click="q = ''"><i data-lucide="x"></i> 검색어 지우기</button>
+    </div>
+    <div v-else-if="loaded && !visible.length" class="empty">
+      <div class="mb-3">표시할 프로젝트가 없습니다. (숨긴 프로젝트 {{ hidden.length }}개)</div>
+      <button v-if="hidden.length" class="btn btn-outline btn-sm" @click="toggleHidden"><i data-lucide="eye-off"></i> 숨기기 해제 열기</button>
+    </div>
+    <div v-else-if="visible.length" class="overflow-x-auto -mx-5">
+      <table class="tbl">
+        <thead><tr><th>서비스명</th><th>URL</th><th v-if="role === 'super'">담당 관리자</th><th>플랫폼</th><th>등록일</th><th class="text-right">관리</th></tr></thead>
+        <tbody>
+          <tr v-for="p in filtered" :key="p.id" class="row-link" @click="open(p)">
+            <td class="font-medium text-slate-900">{{ p.name }}</td>
+            <td class="small muted">{{ p.base_url }}</td>
+            <td v-if="role === 'super'" class="small">
+              <span v-if="p.manager_name" class="badge"><i data-lucide="user" class="size-3"></i> {{ p.manager_name }}</span>
+              <span v-else class="muted">미배정</span>
+            </td>
+            <td><span class="badge">{{ p.platform || 'web' }}</span></td>
+            <td class="small muted num-tab">{{ fmtDate(p.created_at) }}</td>
+            <td class="text-right">
+              <button class="btn btn-outline btn-sm" @click.stop="hide(p)" :disabled="busyId === p.id" aria-label="프로젝트 숨기기">
+                <i data-lucide="eye-off"></i> 숨기기
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 숨긴 프로젝트 — 체크 후 숨기기 해제 -->
+<div v-if="showHidden" class="card mt-4 ring-2 ring-slate-200">
+  <div class="card-body">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <div class="card-h mb-0">숨긴 프로젝트 ({{ hidden.length }})</div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-primary btn-sm" :disabled="!selected.length || busyId === 'bulk'" @click="unhideSelected">
+          <i data-lucide="eye"></i> 숨기기 해제 ({{ selected.length }})
+        </button>
+        <button class="icon-btn" @click="toggleHidden" aria-label="닫기"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+    <div v-if="!hidden.length" class="empty">숨긴 프로젝트가 없습니다.</div>
+    <div v-else class="overflow-x-auto -mx-5">
+      <table class="tbl">
+        <thead><tr>
+          <th class="w-10"><input type="checkbox" :checked="allHiddenChecked" @change="toggleAll" aria-label="전체 선택" /></th>
+          <th>서비스명</th><th>URL</th><th v-if="role === 'super'">담당 관리자</th><th>플랫폼</th><th>등록일</th>
+        </tr></thead>
+        <tbody>
+          <tr v-for="p in hidden" :key="p.id">
+            <td><input type="checkbox" :value="p.id" v-model="selected" :aria-label="p.name + ' 선택'" /></td>
+            <td class="font-medium text-slate-900">{{ p.name }}</td>
+            <td class="small muted">{{ p.base_url }}</td>
+            <td v-if="role === 'super'" class="small">
+              <span v-if="p.manager_name" class="badge"><i data-lucide="user" class="size-3"></i> {{ p.manager_name }}</span>
+              <span v-else class="muted">미배정</span>
+            </td>
+            <td><span class="badge">{{ p.platform || 'web' }}</span></td>
+            <td class="small muted num-tab">{{ fmtDate(p.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 새 프로젝트 등록 팝업 -->
+<div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeCreate">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-lg bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">새 프로젝트 등록</h2>
+      <button class="icon-btn" @click="closeCreate" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <form @submit.prevent="create">
+      <div class="px-5 py-4 max-h-[70vh] overflow-y-auto">
+        <label class="label">서비스명</label>
+        <input class="input mb-3" v-model="form.name" placeholder="예: 마이샵" />
+        <label class="label">대상 URL (baseUrl)</label>
+        <input class="input mb-3" type="url" inputmode="url" v-model="form.baseUrl" placeholder="https://staging.example.com" />
+        <label class="label">플랫폼</label>
+        <select class="select mb-3" v-model="form.platform">
+          <option value="web">Web</option>
+          <option value="app">App(웹뷰)</option>
+        </select>
+        <label class="label">설명 (선택)</label>
+        <textarea class="textarea" rows="2" v-model="form.description" placeholder="서비스 한 줄 설명·핵심 가치"></textarea>
+        <template v-if="role === 'super'">
+          <label class="label mt-3">담당 프로젝트 관리자 (선택)</label>
+          <select class="select" v-model="form.managerId">
+            <option value="">미배정 (최고관리자만 표시)</option>
+            <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
+          </select>
+        </template>
+        <div v-if="err" class="text-red-600 small mt-3">{{ err }}</div>
+      </div>
+      <div class="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+        <button class="btn btn-outline" type="button" @click="closeCreate">취소</button>
+        <button class="btn btn-primary" type="submit" :disabled="saving"><i data-lucide="plus"></i> 프로젝트 만들기</button>
+      </div>
+    </form>
+  </div>
+</div>

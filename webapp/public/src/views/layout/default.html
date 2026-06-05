@@ -1,0 +1,33 @@
+<div class="flex min-h-screen bg-slate-50">
+  <!-- 모바일 드로어 백드롭 (데스크톱에서는 항상 숨김) -->
+  <div id="qaSidebarBackdrop" onclick="qaSidebar(false)" aria-hidden="true"></div>
+  <aside id="qaSidebar" class="flex flex-col w-60 shrink-0 h-screen sticky top-0 border-r border-slate-200 bg-white/70 backdrop-blur px-4 py-6">
+    <div class="flex items-center gap-2.5 px-2 mb-4">
+      <span class="inline-flex items-center justify-center size-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-extrabold shadow-sm shadow-primary-500/30">QA</span>
+      <div class="leading-tight">
+        <div class="text-[14px] font-bold text-slate-900">QA 에이전트팀</div>
+        <div class="text-[11px] text-slate-400">통합 QA 콘솔</div>
+      </div>
+    </div>
+    <nav class="flex flex-col gap-0.5">
+      <a class="nav-link" :class="{ 'nav-active': currentRoute === 'home' }" href="#/home"><i data-lucide="layout-dashboard"></i> 대시보드</a>
+      <a class="nav-link" :class="{ 'nav-active': currentRoute === 'personas' }" href="#/personas"><i data-lucide="users-round"></i> 페르소나 시드</a>
+      <a class="nav-link" :class="{ 'nav-active': ['projects','project-overview','project-personas','project-runs','run-detail','project-qa','qa-issue-detail','project-settings'].includes(currentRoute) }" href="#/projects"><i data-lucide="folder"></i> 프로젝트</a>
+      <a class="nav-link" :class="{ 'nav-active': currentRoute === 'settings' }" href="#/settings"><i data-lucide="settings-2"></i> 설정</a>
+    </nav>
+    <div class="flex-1"></div>
+    <div class="text-[11px] text-slate-400 leading-relaxed px-2 mb-3">사내 QA 에이전트 콘솔<br />페르소나 기반 통합 QA</div>
+    <!-- 접속자 관리: 최고관리자에게만 보임 (CSS 가 <html data-role="super"> 기준으로 표시 결정) -->
+    <a class="btn btn-outline w-full justify-center mb-1.5" data-super-only :class="{ 'nav-active': currentRoute === 'managers' }" href="#/managers"><i data-lucide="user-cog"></i> 접속자 관리</a>
+    <button class="btn btn-outline w-full justify-center" onclick="qaLogout()"><i data-lucide="log-out"></i> 로그아웃</button>
+  </aside>
+  <main class="flex-1 min-w-0 flex flex-col">
+    <!-- 모바일 상단바: 햄버거로 사이드바 열기 (데스크톱에서는 .topbar 가 숨김) -->
+    <div class="topbar">
+      <button class="icon-btn" onclick="qaToggleSidebar()" aria-label="메뉴 열기"><i data-lucide="menu"></i></button>
+      <span class="inline-flex items-center justify-center size-7 rounded-md bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[11px] font-extrabold">QA</span>
+      <span class="text-[14px] font-bold text-slate-900">QA 에이전트팀</span>
+    </div>
+    <div class="w-full max-w-[1760px] px-4 sm:px-7 py-6">{{ content }}</div>
+  </main>
+</div>

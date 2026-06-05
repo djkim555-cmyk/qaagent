@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>맑은 메시지 Admin · Nuxt UI</title>
+<meta name="viewport" content="width=1600" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet" />
+
+<!-- Tailwind via Play CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"DM Sans"','"Pretendard Variable"','Pretendard','ui-sans-serif','system-ui','sans-serif'],
+        },
+        colors: {
+          /* Nuxt UI semantic tokens — primary defaults to blue here */
+          primary: {
+            50:  '#eff6ff',
+            100: '#dbeafe',
+            200: '#bfdbfe',
+            300: '#93c5fd',
+            400: '#60a5fa',
+            500: '#3b82f6',
+            600: '#2563eb',
+            700: '#1d4ed8',
+            800: '#1e40af',
+            900: '#1e3a8a',
+            DEFAULT: '#3b82f6',
+          },
+        },
+        boxShadow: {
+          'ring': '0 0 0 1px rgb(15 23 42 / 0.06), 0 1px 2px rgb(15 23 42 / 0.04)',
+        },
+        ringColor: { DEFAULT: 'rgb(226 232 240)' },
+        ringOffsetWidth: { DEFAULT: '0px' },
+      },
+    },
+  };
+</script>
+
+<style type="text/tailwindcss">
+  @layer base {
+    html, body { font-family: "DM Sans","Pretendard Variable",Pretendard,system-ui,sans-serif; letter-spacing: -0.01em; }
+    body { @apply text-slate-900 bg-slate-50 text-sm; -webkit-font-smoothing: antialiased; }
+    button:focus, [role="button"]:focus { outline: none; }
+    [data-lucide] { width: 1em; height: 1em; }
+  }
+  @layer utilities {
+    /* Nuxt UI-flavoured semantic helpers */
+    .text-default   { @apply text-slate-900; }
+    .text-muted     { @apply text-slate-500; }
+    .text-toned     { @apply text-slate-600; }
+    .text-dimmed    { @apply text-slate-400; }
+    .text-highlighted { @apply text-slate-900 font-medium; }
+    .bg-default     { @apply bg-white; }
+    .bg-muted       { @apply bg-slate-50; }
+    .bg-elevated    { @apply bg-slate-100; }
+    .bg-accented    { @apply bg-slate-200; }
+    .ring-default   { @apply ring-slate-200; }
+    .border-default { @apply border-slate-200; }
+    .divide-default > * + * { @apply border-slate-100; }
+  }
+  /* Subtle scrollbars */
+  .scroll-thin::-webkit-scrollbar{width:8px;height:8px}
+  .scroll-thin::-webkit-scrollbar-thumb{background:rgb(226 232 240);border-radius:999px}
+  .scroll-thin::-webkit-scrollbar-thumb:hover{background:rgb(203 213 225)}
+  .scroll-thin::-webkit-scrollbar-track{background:transparent}
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+</head>
+<body class="min-h-screen">
+  <div id="app"></div>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="ui.jsx"></script>
+  <script type="text/babel" src="lnb.jsx"></script>
+  <script type="text/babel" src="content.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
