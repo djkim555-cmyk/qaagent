@@ -42,11 +42,6 @@ tailwind.config = { theme: { extend: {
       </nav>
     </div>
     <div class="flex items-center gap-3 shrink-0">
-      <span v-if="savedMsg" class="text-xs" :class="savedErr ? 'text-red-600' : 'text-emerald-600'">{{ savedMsg }}</span>
-      <button v-if="view==='run'" class="btn-primary h-8 px-3 text-sm" :disabled="savingAll || !dirtyCount" @click="saveAll">
-        <span v-if="savingAll">저장 중…</span>
-        <span v-else>저장하기<span v-if="dirtyCount"> ({{ dirtyCount }})</span></span>
-      </button>
       <span class="badge bg-slate-100 text-slate-500">조회 + 트리아지 편집</span>
       <a href="/auth/logout" class="text-xs text-slate-400 hover:text-slate-600">로그아웃</a>
     </div>
@@ -94,7 +89,16 @@ tailwind.config = { theme: { extend: {
 
   <!-- 실행 상세: 페르소나 + 이슈 -->
   <section v-else-if="view==='run'">
-    <h1 class="text-lg font-semibold tracking-tight mb-1">{{ shortScenario(run.scenario) }}</h1>
+    <div class="flex items-center justify-between gap-3 mb-1">
+      <h1 class="text-lg font-semibold tracking-tight">{{ shortScenario(run.scenario) }}</h1>
+      <div class="flex items-center gap-3 shrink-0">
+        <span v-if="savedMsg" class="text-xs" :class="savedErr ? 'text-red-600' : 'text-emerald-600'">{{ savedMsg }}</span>
+        <button class="btn-primary h-8 px-3 text-sm" :disabled="savingAll || !dirtyCount" @click="saveAll">
+          <span v-if="savingAll">저장 중…</span>
+          <span v-else>저장하기<span v-if="dirtyCount"> ({{ dirtyCount }})</span></span>
+        </button>
+      </div>
+    </div>
     <div class="flex flex-wrap items-center gap-2 mb-4 text-xs text-slate-500">
       <span class="badge" :class="runStatusCls(run.status)">{{ run.status }}</span>
       <span v-if="run.launch_recommendation">출시권고: <b class="text-slate-700">{{ run.launch_recommendation }}</b></span>
