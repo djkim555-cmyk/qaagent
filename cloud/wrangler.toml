@@ -20,7 +20,8 @@ database_id = "c49bfbeb-2581-46af-8080-a0646ab6e2de"
 # bucket_name = "qa-viewer-assets"
 
 [vars]
-# Access 미설정(로컬 dev) 시 조회/트리아지를 허용할지. 운영 배포에서는 반드시 "false".
+# Access 미설정 시 /api 접근 허용 여부. 운영 기본은 "false"(Access 로그인 필수 = fail-closed).
+# 임시 공개 미리보기가 필요하면 운영자 승인하에 "true" 로 바꿔 재배포(누구나 조회+트리아지 가능 — 주의).
 DEV_ALLOW_NO_ACCESS = "false"
 
 # ── 시크릿(코드/설정에 값 금지) ──

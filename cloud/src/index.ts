@@ -6,6 +6,7 @@
 //   S2 조회 /api/* (GET)  → Cloudflare Access (Cf-Access-Authenticated-User-Email)
 //   S3 트리아지 /api/issues/:id/triage (PATCH) → Access 이메일 = updated_by
 import { Hono } from 'hono'
+import { VIEWER_HTML } from './viewer'
 
 export interface Env {
   DB: D1Database
@@ -197,6 +198,14 @@ app.patch('/api/issues/:id/triage', async (c) => {
 })
 
 app.get('/health', (c) => json(c, { ok: true }))
+
+// 뷰어 SPA — /api·/sync·/health 외 모든 GET 은 단일 페이지(해시 라우팅)를 서빙.
+// (Access 가 켜지면 이 페이지 로드 자체도 Access 로그인 뒤에 도달한다.)
+app.get('*', (c) => {
+  const p = c.req.path
+  if (p.startsWith('/api') || p.startsWith('/sync')) return json(c, { error: 'not found' }, 404)
+  return c.html(VIEWER_HTML)
+})
 app.notFound((c) => json(c, { error: 'not found' }, 404))
 
 export default app
