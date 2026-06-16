@@ -9,7 +9,7 @@ import { Hono } from 'hono'
 
 export interface Env {
   DB: D1Database
-  ASSETS: R2Bucket
+  ASSETS?: R2Bucket // R2 활성화 후 바인딩(미활성 시 /api/assets 만 비활성)
   SYNC_TOKEN: string
   DEV_ALLOW_NO_ACCESS?: string
 }
@@ -166,6 +166,7 @@ app.get('/api/developers', async (c) => {
 
 // 리포트(마크다운)·스크린샷 등 R2 자산 — 키는 DB 의 *_path / evidence 값과 동일(runs/{runId}/...)
 app.get('/api/assets/*', async (c) => {
+  if (!c.env.ASSETS) return json(c, { error: 'r2_disabled', message: 'R2 미구성 — 리포트·스크린샷 조회는 R2 활성화 후 가능' }, 503)
   const key = c.req.path.replace(/^\/api\/assets\//, '')
   const obj = await c.env.ASSETS.get(key)
   if (!obj) return json(c, { error: 'not found' }, 404)

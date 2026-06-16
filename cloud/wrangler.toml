@@ -9,13 +9,15 @@ compatibility_date = "2026-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "qa-viewer-db"
-database_id = "TODO_M1_에서_채움"
+database_id = "c49bfbeb-2581-46af-8080-a0646ab6e2de"
 
 # ── R2 (리포트 마크다운 + 스크린샷) ──
-# M1 에서: wrangler r2 bucket create qa-viewer-assets
-[[r2_buckets]]
-binding = "ASSETS"
-bucket_name = "qa-viewer-assets"
+# ⚠ R2 미활성(계정에서 R2 활성화 후 주석 해제). 활성화: 대시보드 → R2 → Enable,
+#    그 뒤: wrangler r2 bucket create qa-viewer-assets → 아래 주석 해제 → 재배포.
+#    R2 없이도 D1 기반 조회/트리아지/동기화는 정상 동작(리포트·스크린샷 조회만 보류).
+# [[r2_buckets]]
+# binding = "ASSETS"
+# bucket_name = "qa-viewer-assets"
 
 [vars]
 # Access 미설정(로컬 dev) 시 조회/트리아지를 허용할지. 운영 배포에서는 반드시 "false".
