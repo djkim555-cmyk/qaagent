@@ -41,7 +41,10 @@ tailwind.config = { theme: { extend: {
         </span>
       </nav>
     </div>
-    <span class="badge bg-slate-100 text-slate-500">읽기 + 트리아지</span>
+    <div class="flex items-center gap-3 shrink-0">
+      <span class="badge bg-slate-100 text-slate-500">읽기 + 트리아지</span>
+      <a href="/auth/logout" class="text-xs text-slate-400 hover:text-slate-600">로그아웃</a>
+    </div>
   </header>
 
   <div v-if="loading" class="text-slate-400 py-20 text-center">불러오는 중…</div>

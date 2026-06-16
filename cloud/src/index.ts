@@ -7,12 +7,19 @@
 //   S3 트리아지 /api/issues/:id/triage (PATCH) → Access 이메일 = updated_by
 import { Hono } from 'hono'
 import { VIEWER_HTML } from './viewer'
+import { loginRedirect, callback, logout, sessionEmail, isAllowed, loginPageHtml } from './auth'
 
 export interface Env {
   DB: D1Database
   ASSETS?: R2Bucket // R2 활성화 후 바인딩(미활성 시 /api/assets 만 비활성)
   SYNC_TOKEN: string
   DEV_ALLOW_NO_ACCESS?: string
+  // Worker 내장 Google 로그인(Access 대체)
+  GOOGLE_CLIENT_ID: string
+  GOOGLE_CLIENT_SECRET: string
+  SESSION_SECRET: string
+  ALLOWED_EMAILS?: string
+  ALLOWED_DOMAIN?: string
 }
 
 const app = new Hono<{ Bindings: Env; Variables: { email: string } }>()
@@ -27,14 +34,21 @@ app.use('/sync/*', async (c, next) => {
   if (!c.env.SYNC_TOKEN || token !== c.env.SYNC_TOKEN) return json(c, { error: 'unauthorized' }, 401)
   await next()
 })
-// S2/S3: Access 이메일(=신원). Access 가 앞단에서 검증 후 헤더 주입.
+// S2/S3: 세션(Google 로그인) 이메일 = 신원. 허용목록 외/미로그인 → 401.
 app.use('/api/*', async (c, next) => {
-  let email = c.req.header('Cf-Access-Authenticated-User-Email') || ''
-  if (!email && c.env.DEV_ALLOW_NO_ACCESS === 'true') email = 'dev@local' // 로컬 dev 전용
-  if (!email) return json(c, { error: 'unauthorized', message: 'Cloudflare Access 인증 필요' }, 401)
+  let email = await sessionEmail(c)
+  if (email && !isAllowed(c, email)) email = null // 허용목록에서 빠지면 즉시 차단
+  if (!email && c.env.DEV_ALLOW_NO_ACCESS === 'true') email = 'dev@local'
+  if (!email) return json(c, { error: 'unauthorized', message: '로그인이 필요합니다.' }, 401)
   c.set('email', email)
   await next()
 })
+
+// 로그인 라우트(Google OIDC)
+app.get('/login', (c) => c.html(loginPageHtml()))
+app.get('/auth/login', (c) => loginRedirect(c))
+app.get('/auth/callback', (c) => callback(c))
+app.get('/auth/logout', (c) => logout(c))
 
 /* ───────────────── S1: A 데이터 ingest (단방향 복제) ───────────────── */
 app.post('/sync/ingest/run', async (c) => {
@@ -201,9 +215,11 @@ app.get('/health', (c) => json(c, { ok: true }))
 
 // 뷰어 SPA — /api·/sync·/health 외 모든 GET 은 단일 페이지(해시 라우팅)를 서빙.
 // (Access 가 켜지면 이 페이지 로드 자체도 Access 로그인 뒤에 도달한다.)
-app.get('*', (c) => {
+app.get('*', async (c) => {
   const p = c.req.path
   if (p.startsWith('/api') || p.startsWith('/sync')) return json(c, { error: 'not found' }, 404)
+  const email = await sessionEmail(c)
+  if (!email && c.env.DEV_ALLOW_NO_ACCESS !== 'true') return c.redirect('/login')
   return c.html(VIEWER_HTML)
 })
 app.notFound((c) => json(c, { error: 'not found' }, 404))
