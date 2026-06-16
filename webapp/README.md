@@ -72,8 +72,8 @@ npm run dev                  # http://localhost:5510
 | 키 | 기본 | 설명 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Agent SDK 인증. **`claude login` 세션이 있으면 비워둬도 됨**(세션 사용). 세션 없는 머신에서만 필수 |
-| `QA_PASSWORD` | malgnqa | 로그인 비밀번호 |
-| `QA_SESSION_SECRET` | change-me | 세션 쿠키 서명 시크릿 |
+| `QA_PASSWORD` | **(필수)** | 슈퍼관리자 로그인 비밀번호. 미설정/공개기본값(`malgnqa`)이면 서버 미기동 |
+| `QA_SESSION_SECRET` | **(필수)** | 세션 쿠키 서명 시크릿(랜덤 32자↑). 미설정/공개기본값이면 서버 미기동 |
 | `PORT` | 5510 | 서버 포트 |
 | `QA_CONCURRENCY` | 3 | 페르소나 동시 실행 수 |
 | `QA_MODEL` | sonnet | 페르소나/통합/생성 모델 |

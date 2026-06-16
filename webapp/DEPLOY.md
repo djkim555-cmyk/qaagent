@@ -45,8 +45,8 @@ npx playwright install chromium   # 브라우저 바이너리 사전 설치 (권
 # 인증은 둘 중 하나. (A) 이 서버에서 `claude login` 했다면 비워둬도 됨(로그인 세션 사용).
 #                    (B) 세션이 없으면 키 입력 — 무인 전용 서버는 보통 이 방식.
 ANTHROPIC_API_KEY=sk-ant-...        # 로그인 세션이 없을 때만 필수
-QA_PASSWORD=<강한-비밀번호로-변경>    # 기본 malgnqa 그대로 두지 말 것
-QA_SESSION_SECRET=<랜덤-32자-이상>    # 기본 change-me 그대로 두지 말 것
+QA_PASSWORD=<강한-비밀번호로-변경>    # [필수] 미설정 시 기본값 malgnqa 로 폴백됨 → 공개 노출 전 반드시 변경
+QA_SESSION_SECRET=<랜덤-32자-이상>    # [필수] 미설정 시 공개 기본 시크릿으로 폴백 → 쿠키 위조 위험, 반드시 교체
 PORT=5510
 QA_CONCURRENCY=3                    # 서버 사양에 맞게 (브라우저 동시 수)
 QA_MODEL=sonnet
@@ -61,7 +61,13 @@ QA_ENABLE_PLAYWRIGHT=true
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
+> `.env` 는 부팅 시 `src/env.ts` 가 Node 내장 `process.loadEnvFile` 로 자동 로드한다(별도 dotenv 불필요).
+> 따라서 위 값들이 실제 적용된다(설정만 하면 코드 수정 없이 반영).
+>
 > `.env`, `data/`, `reports/runs/` 는 `.gitignore` 처리됨 — 자격증명·결과가 커밋되지 않습니다.
+
+> **클라우드 결과공유 동기화(선택)**: `CLOUD_SYNC_URL` + `SYNC_TOKEN` 을 설정하면 실행 결과·트리아지를
+> Cloudflare(D1/Workers)로 동기화한다. 미설정이면 완전 비활성(로컬 전용). 설계: `docs/결과공유_클라우드뷰어/`.
 
 ---
 
@@ -128,6 +134,35 @@ pm2 save
 pm2 startup        # 출력되는 명령 실행 → 부팅 시 자동 시작
 # Windows 부팅 자동시작: npm i -g pm2-windows-startup && pm2-startup install
 ```
+
+### 4-D. Windows 개인 PC — 로그온 자동시작 (이 저장소에 설정됨)
+
+별도 서버가 아닌 개인 PC라면, **로그온 자동시작 + 2분 주기 자가복구**가 가장 간단하다.
+이 저장소에는 다음이 구성되어 있다(2중 복구: ① 런처 내부 루프 ② 작업 스케줄러 반복 트리거):
+
+- **런처**: `webapp/autostart-server.ps1` — 5510 미기동 시 `npm start` 실행, 서버가 죽으면 10초 뒤 재시작, 로그는 `out.log`/`err.log` 누적. (Windows PowerShell 5.1 이 BOM 없는 한글을 cp949 로 오인하므로 **스크립트는 순수 ASCII**로 두고 webapp 경로는 `$PSScriptRoot` 에서 가져온다.)
+- **작업 스케줄러**: `QA Agent Team Webapp`
+  - 트리거 = 현재 사용자 **로그온** + **2분마다 반복**(자가복구). 로그오프/절전 등으로 런처 자체가 죽어도 최대 2분 안에 작업이 다시 띄운다.
+  - **MultipleInstances=IgnoreNew** — 런처가 살아 있으면 반복이 중복 실행하지 않는다(런처는 단 1개 유지).
+  - 액션 = `powershell.exe -WindowStyle Hidden -File autostart-server.ps1`, 실행시간 제한 없음, 실패 시 1분 간격 3회 재시작.
+  - 로그온 세션에서 돌아 `claude login` 세션 인증을 그대로 쓴다(이 PC는 API 키 없이 세션 인증 사용).
+
+```powershell
+# 상태 확인 / 즉시 시작 / 중지 / 해제
+Get-ScheduledTaskInfo -TaskName "QA Agent Team Webapp"
+Start-ScheduledTask      -TaskName "QA Agent Team Webapp"
+Stop-ScheduledTask       -TaskName "QA Agent Team Webapp"
+Disable-ScheduledTask    -TaskName "QA Agent Team Webapp"   # 자가복구 일시중지(점검 시)
+Unregister-ScheduledTask -TaskName "QA Agent Team Webapp" -Confirm:$false   # 자동시작 완전 해제
+```
+
+> 주의 1: 로그온 트리거이므로 **재부팅 후 이 사용자가 로그인해야** 서버가 뜬다(개인 PC 사용 패턴 기준).
+> 로그인 없이 부팅만으로 띄우려면 `.env` 에 `ANTHROPIC_API_KEY` 를 넣고(세션 인증은 무인 컨텍스트에서 깨짐)
+> 4-B(NSSM)/4-C(pm2)처럼 서비스/부팅 트리거로 전환한다.
+>
+> 주의 2(개발 메모): `Get-CimInstance powershell | Where CommandLine -match 'autostart-server' | Stop-Process`
+> 류로 런처를 정리하면 **명령 텍스트 자체가 매칭되어 실행 중인 셸까지 죽는다**. PID 를 먼저 모아 `$_.ProcessId -ne $PID`
+> 로 자기 자신을 제외하고 죽일 것.
 
 ---
 

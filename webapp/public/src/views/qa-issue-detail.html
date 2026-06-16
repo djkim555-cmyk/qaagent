@@ -57,8 +57,8 @@
     </div></div>
 
     <div class="card"><div class="card-body">
-      <div class="card-h">화면 캡쳐 ({{ shots.length }})</div>
-      <div v-if="!shots.length" class="empty small">이 페르소나 실행에서 저장된 스크린샷이 없습니다. (시뮬레이션 모드이거나 캡쳐 미수집)</div>
+      <div class="card-h">오류 화면 캡쳐 ({{ shots.length }})</div>
+      <div v-if="!shots.length" class="empty small">이 이슈의 오류 화면으로 기록된 캡쳐가 없습니다. (정상 완료 항목이거나 시뮬레이션 모드)</div>
       <div v-else class="grid grid-cols-2 md:grid-cols-3 gap-3">
         <a v-for="s in shots" :key="s.file" :href="s.url" target="_blank" class="block ring-1 ring-inset ring-slate-200 rounded-md overflow-hidden hover:ring-2 hover:ring-primary-500 transition">
           <img :src="s.url" :alt="s.file" class="w-full h-40 object-cover object-top bg-slate-50" loading="lazy" />

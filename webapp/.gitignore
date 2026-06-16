@@ -1,3 +1,10 @@
 node_modules/
+# 자격증명·세션 시크릿 포함 — .env 와 모든 백업/변형(.env.bak, .env.local 등) 제외.
+# 단, 플레이스홀더만 담긴 .env.example 은 커밋 허용.
 .env
+.env.*
+!.env.example
 data/
+# 런타임·터널 로그(out.log/err.log/cf-tunnel.log 등)
+*.log
+*.log.err

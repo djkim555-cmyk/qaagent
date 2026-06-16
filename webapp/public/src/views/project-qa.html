@@ -23,8 +23,8 @@
   </div>
 </div>
 
-<!-- 처리 현황 대시보드 (얇게) -->
-<div v-if="issues.length" class="card mb-4"><div class="card-body py-3">
+<!-- 처리 현황 대시보드 (얇게) — 성공(통과) 항목 제외, 실제 이슈 기준 -->
+<div v-if="realIssues.length" class="card mb-4"><div class="card-body py-3">
   <div class="flex items-center gap-4 flex-wrap">
     <div class="flex items-center gap-2 shrink-0">
       <span class="small muted">처리 현황</span>
@@ -48,7 +48,7 @@
 
 <div class="card accent"><div class="card-body">
   <div class="flex items-center justify-between mb-2">
-    <div class="card-h m-0">QA 시나리오 기준 발견 이슈 ({{ filtered.length }}/{{ issues.length }}건)</div>
+    <div class="card-h m-0">QA 시나리오 기준 결과 ({{ grouped.reps.length }}행 / 총 {{ issues.length }}건)</div>
     <button v-if="anyFilter" class="btn btn-ghost btn-sm" @click="clearAllFilters"><i data-lucide="filter-x"></i> 필터 초기화</button>
   </div>
   <div v-if="loaded && !issues.length" class="empty">아직 이슈가 없습니다. <a :href="'#/project-runs?id=' + id" class="text-mint">실행</a> 후 발견된 이슈가 여기에 모입니다.</div>
@@ -69,11 +69,18 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="i in filtered" :key="i.id">
+          <tr v-for="i in grouped.reps" :key="i.id">
             <td class="num-tab"><span class="badge">{{ ordinal(i.run_id) }}차</span></td>
-            <td><span class="badge" :class="'sev-' + i.severity">{{ i.severity || '-' }}</span></td>
+            <td>
+              <span v-if="i.category === '성공'" class="badge sev-success">성공</span>
+              <span v-else class="badge" :class="'sev-' + i.severity">{{ i.severity || '-' }}</span>
+            </td>
             <td class="small">{{ (i.scenario || '').replace('scenarios/', '') }}</td>
-            <td><a class="text-primary-700 font-medium hover:underline cursor-pointer" @click="openIssue(i)">{{ i.title || '(제목 없음)' }}</a><span v-if="i.confidence === '추정'" class="muted small"> [추정]</span></td>
+            <td>
+              <a class="text-primary-700 font-medium hover:underline cursor-pointer" @click="openIssue(i)">{{ i.title || '(제목 없음)' }}</a>
+              <span v-if="dupCount(i) > 1" class="muted small num-tab">{{ dupSuffix(i) }}</span>
+              <span v-if="i.confidence === '추정'" class="muted small"> [추정]</span>
+            </td>
             <td class="small muted">{{ i.type || '' }}</td>
             <td class="small muted">{{ personaLabel(i) }}</td>
             <td>
@@ -99,11 +106,11 @@
               </button>
             </td>
           </tr>
-          <tr v-if="!filtered.length"><td :colspan="columns.length + 1" class="empty">필터 조건에 맞는 이슈가 없습니다.</td></tr>
+          <tr v-if="!grouped.reps.length"><td :colspan="columns.length + 1" class="empty">필터 조건에 맞는 항목이 없습니다.</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="small muted mt-2">구분·담당자·상태를 바꾼 뒤 <b>저장하기</b>로 DB에 저장합니다. 컬럼 머리의 <i data-lucide="list-filter" class="size-3 inline"></i> 로 값을 복수 선택해 필터링할 수 있습니다. 제목 클릭 시 상세(현상·화면 캡쳐)를 봅니다.</div>
+    <div class="small muted mt-2">구분·담당자·상태를 바꾼 뒤 <b>저장하기</b>로 DB에 저장합니다. 컬럼 머리의 <i data-lucide="list-filter" class="size-3 inline"></i> 로 값을 복수 선택해 필터링할 수 있습니다. 제목 클릭 시 상세(현상·오류 화면 캡쳐)를 봅니다. 통과한 태스크는 <b>성공</b>으로 함께 표시되고, 한 페르소나가 같은 오류를 여러 번 겪으면 <b>외 N건</b>으로 묶여 보입니다.</div>
   </template>
 </div></div>
 

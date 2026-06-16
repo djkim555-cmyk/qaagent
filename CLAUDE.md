@@ -73,7 +73,11 @@ QA 에이전트팀/
 ├── rules/                          # 추가 규칙 문서 (선택)
 ├── data/                           # 정적/참조 데이터 (선택)
 └── .claude/
+    ├── agents/qa-lead.md           # 팀 오케스트레이터 (사전점검·단계전환·보고)
+    ├── agents/scenario-planner.md  # 시나리오 기획 서브에이전트 (파이프라인 앞단)
     ├── agents/persona-tester.md    # 페르소나 1명 테스트 서브에이전트
+    ├── agents/a11y-specialist.md   # 접근성(WCAG) 전담 점검 서브에이전트
+    ├── agents/evidence-auditor.md  # 증거 검수(신뢰성 게이트) 서브에이전트
     ├── agents/qa-synthesizer.md    # 통합 분석 서브에이전트
     ├── commands/run-qa.md          # 전체 실행 커맨드 (/run-qa)
     └── workflows/persona-qa.js     # N인 병렬 fan-out 워크플로우

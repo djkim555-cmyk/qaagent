@@ -2,38 +2,63 @@ import crypto from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 import * as repo from './repo.js'
 
-// 비밀번호 단독 로그인. 입력한 비밀번호가 신원을 결정한다:
-//  - QA_PASSWORD(기본 malgnqa) 일치  → 최고관리자(super)
-//  - 관리자 password_hash 일치        → 해당 프로젝트 관리자(manager)
-const SUPER_PASSWORD = process.env.QA_PASSWORD || 'malgnqa'
-const SECRET = process.env.QA_SESSION_SECRET || 'qa-agent-team-internal-secret-v1'
+// ID/PW 로그인. 신원 판정:
+//  - login_id === SUPER_ID(기본 'admin') 이고 비밀번호가 QA_PASSWORD 와 일치 → 슈퍼관리자(super)
+//  - login_id 로 찾은 회원이 승인(approved)·활성 상태이고 password_hash 일치 → 회원(manager)
+// 보안: 시크릿에 기본값을 제공하지 않는다(fail-closed).
+//  - 미설정이면 서버를 기동하지 않는다(import 시점에 throw).
+//  - 과거 소스/예시에 박혀 있던 공개 기본값도 거부한다(이미 노출된 자격증명이므로).
+const PUBLIC_DEFAULTS: Record<string, string[]> = {
+  QA_PASSWORD: ['malgnqa'],
+  QA_SESSION_SECRET: ['change-me', 'qa-agent-team-internal-secret-v1'],
+}
+function requireSecret(name: 'QA_PASSWORD' | 'QA_SESSION_SECRET'): string {
+  const v = (process.env[name] || '').trim()
+  if (!v) {
+    throw new Error(`[auth] 필수 환경변수 ${name} 가 설정되지 않았습니다. webapp/.env 또는 시크릿에 설정하세요(보안상 기본값을 제공하지 않습니다).`)
+  }
+  if (PUBLIC_DEFAULTS[name].includes(v)) {
+    throw new Error(`[auth] ${name} 가 공개된 기본값(${v})으로 설정되어 있습니다. 고유한 값으로 변경하세요.`)
+  }
+  return v
+}
+
+const SUPER_PASSWORD = requireSecret('QA_PASSWORD')
+// 슈퍼관리자 전용 로그인 아이디. 회원가입 시 이 아이디는 사용 금지. (비밀이 아니므로 기본값 'admin' 허용)
+export const SUPER_ID = (process.env.QA_ADMIN_ID || 'admin').trim().toLowerCase()
+const SECRET = requireSecret('QA_SESSION_SECRET')
 const COOKIE = 'qa_session'
 const MAX_AGE = 1000 * 60 * 60 * 24 * 7 // 7일
 
 export type Identity = { role: 'super' | 'manager'; managerId: number | null }
+// 로그인 결과: identity 가 있으면 성공. pending=true 면 미승인(친절한 메시지용).
+export type AuthResult = { identity: Identity | null; pending?: boolean }
 
-// 비밀번호 → HMAC 해시. DB 에는 평문이 아니라 이 해시만 저장(전체 고유 = 로그인 식별 키).
+// 비밀번호 → HMAC 해시. DB 에는 평문이 아니라 이 해시만 저장.
 export function hashPassword(pw: string): string {
   return crypto.createHmac('sha256', SECRET).update('pw:' + String(pw ?? '')).digest('hex')
 }
 
 const SUPER_HASH = hashPassword(SUPER_PASSWORD)
-
-// 입력 비밀번호로 신원 판정. 실패 시 null.
-export function authenticate(pw: string): Identity | null {
-  const hash = hashPassword(pw)
-  // 최고관리자 우선 (타이밍 안전 비교)
-  const a = Buffer.from(hash), b = Buffer.from(SUPER_HASH)
-  if (a.length === b.length && crypto.timingSafeEqual(a, b)) return { role: 'super', managerId: null }
-  const m = repo.getManagerByPasswordHash(hash)
-  if (m) return { role: 'manager', managerId: Number(m.id) }
-  return null
+const eq = (x: string, y: string) => {
+  const a = Buffer.from(x), b = Buffer.from(y)
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
-// 관리자 비밀번호가 최고관리자 비밀번호와 충돌하는지(같은 비밀번호 금지)
-export function isSuperPassword(pw: string): boolean {
-  const a = Buffer.from(hashPassword(pw)), b = Buffer.from(SUPER_HASH)
-  return a.length === b.length && crypto.timingSafeEqual(a, b)
+// 입력 아이디+비밀번호로 신원 판정.
+export function authenticate(loginId: string, pw: string): AuthResult {
+  const id = String(loginId ?? '').trim().toLowerCase()
+  // 슈퍼관리자: 전용 아이디 + 마스터 비밀번호
+  if (id === SUPER_ID && eq(hashPassword(pw), SUPER_HASH)) return { identity: { role: 'super', managerId: null } }
+  const m = repo.getMemberByLoginId(id)
+  if (!m || !eq(hashPassword(pw), String(m.password_hash))) return { identity: null }
+  if (m.status !== 'approved') return { identity: null, pending: true }
+  return { identity: { role: 'manager', managerId: Number(m.id) } }
+}
+
+// 회원가입 아이디가 슈퍼관리자 전용 아이디와 충돌하는지
+export function isReservedLoginId(loginId: string): boolean {
+  return String(loginId ?? '').trim().toLowerCase() === SUPER_ID
 }
 
 /* ── 서명 쿠키: base64url(payload).hmac — 신원(role/managerId)을 위변조 없이 담는다 ── */
@@ -80,9 +105,11 @@ function parseCookies(req: Request): Record<string, string> {
 export function getIdentity(req: Request): Identity | null {
   const id = decode(parseCookies(req)[COOKIE])
   if (!id) return null
-  // 관리자 계정이 삭제/비활성화되면 즉시 무효화
+  // 회원 계정이 삭제(탈퇴)·미승인되면 즉시 무효화
   if (id.role === 'manager') {
-    if (id.managerId == null || !repo.getManager(id.managerId)) return null
+    if (id.managerId == null) return null
+    const m = repo.getManager(id.managerId)
+    if (!m || m.status !== 'approved') return null
   }
   return id
 }

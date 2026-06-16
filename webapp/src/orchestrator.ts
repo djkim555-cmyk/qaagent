@@ -116,7 +116,15 @@ function personaPrompt(testerBody: string, persona: any, run: RunState): string 
             actual: '실제 동작',
             impact: '왜 이 페르소나에게 특히 문제인가',
             suggestion: '사용자 관점 개선 제안(없으면 빈 문자열)',
-            evidence: 'reports/runs/.../shot-XX.png · 콘솔: ...',
+            evidence: 'shot-XX.png · 콘솔: ...',
+            confidence: '확인됨',
+          },
+        ],
+        successes: [
+          {
+            task: '문제 없이 완료한 태스크(시나리오 태스크명)',
+            summary: '어떻게 무리 없이 끝냈는지 한 줄 요약',
+            evidence: '(선택) shot-XX.png',
             confidence: '확인됨',
           },
         ],
@@ -128,6 +136,8 @@ function personaPrompt(testerBody: string, persona: any, run: RunState): string 
     '```',
     'severity ∈ {Blocker,Major,Minor,Nitpick}, type ∈ {기능버그,사용성,접근성,콘텐츠,성능,신뢰UX}, confidence ∈ {확인됨,추정}.',
     'symptom/repro/expected/actual/impact 는 reports/_individual-template.md 의 "발견 이슈" 블록과 1:1로 대응한다(현상·재현단계·기대·실제·페르소나 영향). repro 는 단계 문자열 배열. 증거 없는 판단은 confidence="추정". suggestion 은 선택(있을 때만).',
+    'successes: 이슈 없이 정상 완료한 태스크를 빠짐없이 배열로 적는다(통과 기록 — 리스트에 "성공"으로 표시됨). 완료한 태스크가 없으면 빈 배열.',
+    '스크린샷 규칙: 화면이 바뀔 때마다 무분별하게 찍지 말고, (1) 오류·실패·막힘이 발생한 바로 그 화면을 우선 캡처하고, (2) 이슈의 evidence 에는 그 오류 화면 파일명(예: shot-03.png)을 반드시 적는다. 상세 화면은 evidence 에 적힌 캡처만 "오류 화면"으로 노출한다. 정상 태스크는 캡처가 선택사항이다.',
   ].join('\n')
 }
 

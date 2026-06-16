@@ -25,13 +25,6 @@
     </select>
     <label class="label">설명</label>
     <textarea class="textarea mb-3" rows="2" v-model="form.description"></textarea>
-    <template v-if="role === 'super'">
-      <label class="label">담당 프로젝트 관리자</label>
-      <select class="select mb-3" v-model="form.managerId">
-        <option value="">미배정 (최고관리자만 표시)</option>
-        <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
-      </select>
-    </template>
     <label class="label">금지 행위 / 영역 (guards, 줄바꿈 구분)</label>
     <textarea class="textarea" rows="3" v-model="form.guards" placeholder="실제 결제 최종 승인&#10;데이터 영구 삭제&#10;/admin"></textarea>
     <div class="rounded-lg bg-amber-50 ring-1 ring-inset ring-amber-200 p-3.5 flex gap-2.5 mt-3">
@@ -45,63 +38,62 @@
   </form>
 </div></div>
 
-<!-- 담당자 관리 (프로젝트별) -->
+<!-- 담당자 관리 (= 이 프로젝트에 매칭된 회원) — 접속자 관리 › 프로젝트 매칭 › 회원매칭과 동일한 방식 -->
 <div class="card max-w-[620px] mt-3"><div class="card-body">
-  <div class="card-h">담당자 관리</div>
-  <p class="small muted">이 프로젝트의 QA 이슈를 배정할 담당자 목록입니다. 프로젝트마다 별도로 관리됩니다.</p>
-  <div v-if="!developers.length" class="empty">등록된 담당자가 없습니다. 아래에서 추가하세요.</div>
-  <div v-else class="overflow-x-auto -mx-5">
-    <table class="tbl">
-      <tbody>
-        <tr v-for="d in developers" :key="d.id">
-          <td class="font-bold text-slate-900">{{ d.name }}</td>
-          <td class="small muted">{{ d.email || '' }}</td>
-          <td class="text-right"><button class="btn btn-danger-outline btn-sm" @click="openDelete(d)"><i data-lucide="trash-2"></i> 삭제</button></td>
-        </tr>
-      </tbody>
-    </table>
+  <div class="flex items-center justify-between mb-1">
+    <div class="card-h m-0">담당자 관리</div>
+    <span class="small muted num-tab">{{ memberSel.length }}명 선택</span>
   </div>
-  <div class="flex items-end gap-2 mt-3">
-    <div class="flex-1"><input class="input" v-model="dName" placeholder="이름" @keydown.enter="addDev" /></div>
-    <div class="flex-1"><input class="input" v-model="dEmail" placeholder="이메일(선택)" @keydown.enter="addDev" /></div>
-    <button class="btn btn-primary" @click="addDev" :disabled="devSaving"><i data-lucide="plus"></i> 추가</button>
-  </div>
-  <div v-if="devErr" class="text-red-600 small mt-2">{{ devErr }}</div>
-</div></div>
+  <p class="small muted mb-3">QA 이슈를 배정할 담당자를 가입 회원 중에서 선택합니다. 선택된 회원은 이 프로젝트에 접근할 수 있습니다. (접속자 관리 › 프로젝트 매칭과 동일한 설정)</p>
 
-<!-- 담당자 삭제 — 이중 컨펌 팝업 -->
-<div v-if="showDelete" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDelete">
-  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
-  <div class="relative w-full max-w-md bg-white rounded-lg ring-1 ring-slate-200 shadow-2xl" role="dialog" aria-modal="true">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-      <h2 class="text-base font-bold tracking-tight text-slate-900 m-0">
-        <span v-if="delStage === 1">담당자 삭제</span>
-        <span v-else>정말 삭제할까요?</span>
-      </h2>
-      <button class="icon-btn" @click="closeDelete" aria-label="닫기"><i data-lucide="x"></i></button>
+  <div v-if="!allMembers.length" class="empty">선택할 수 있는 승인 회원이 없습니다. 슈퍼관리자가 <a href="#/managers" class="text-mint">회원관리</a>에서 승인해야 합니다.</div>
+  <template v-else>
+    <!-- 선택된 회원 칩 -->
+    <div class="mb-3">
+      <div class="label flex items-center justify-between">
+        <span>매칭된 담당자</span>
+        <span class="small muted num-tab">{{ selectedMembers.length }}명</span>
+      </div>
+      <div v-if="!selectedMembers.length" class="text-sm text-slate-400 px-3 py-2.5 rounded-md border border-dashed border-slate-300">
+        아래에서 회원을 검색해 추가하세요.
+      </div>
+      <div v-else class="flex flex-wrap gap-1.5">
+        <span v-for="m in selectedMembers" :key="m.id"
+              class="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full bg-primary-50 ring-1 ring-inset ring-primary-200 text-sm text-primary-800">
+          <span class="font-medium">{{ m.name }}</span>
+          <span class="text-primary-400 mono text-xs">{{ m.login_id }}</span>
+          <button type="button" class="inline-flex items-center justify-center size-5 rounded-full text-primary-400 hover:bg-primary-100 hover:text-primary-700"
+                  @click="removeMember(m.id)" :aria-label="m.name + ' 제거'"><i data-lucide="x" class="size-3.5"></i></button>
+        </span>
+      </div>
     </div>
-    <div class="px-5 py-4">
-      <template v-if="delStage === 1">
-        <p class="text-sm text-slate-700 m-0"><span class="font-semibold text-slate-900">{{ delTarget && delTarget.name }}</span> 담당자를 삭제하시겠어요?</p>
-        <p class="small muted mt-2">이미 배정된 이슈의 담당자 표시는 유지될 수 있으나, 이후 배정 목록에서는 제외됩니다.</p>
-      </template>
-      <template v-else>
-        <div class="flex items-start gap-2.5 rounded-md bg-red-50 ring-1 ring-inset ring-red-500/20 px-3 py-2.5">
-          <i data-lucide="triangle-alert" class="size-4 text-red-600 mt-0.5"></i>
-          <p class="text-sm text-red-700 m-0">이 작업은 되돌릴 수 없습니다. <span class="font-semibold">{{ delTarget && delTarget.name }}</span> 을(를) 삭제하려면 한 번 더 확인해 주세요.</p>
-        </div>
-      </template>
-      <div v-if="delErr" class="text-red-600 small mt-3">{{ delErr }}</div>
+
+    <!-- 회원 검색 → 추가 -->
+    <label class="label">회원 검색</label>
+    <div class="relative mb-2">
+      <i data-lucide="search" class="size-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+      <input v-model="memberQuery" type="search" class="input pl-8" placeholder="이름·아이디·연락처로 검색" @keydown.enter.prevent="addFirstMemberCandidate" />
     </div>
-    <div class="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
-      <template v-if="delStage === 1">
-        <button class="btn btn-outline" type="button" @click="closeDelete">취소</button>
-        <button class="btn btn-danger-outline" type="button" @click="delStage = 2"><i data-lucide="trash-2"></i> 삭제 진행</button>
-      </template>
-      <template v-else>
-        <button class="btn btn-outline" type="button" @click="delStage = 1">뒤로</button>
-        <button class="btn btn-danger" type="button" :disabled="delSaving" @click="confirmDelete"><i data-lucide="trash-2"></i> 삭제 확정</button>
-      </template>
+    <div class="rounded-md ring-1 ring-inset ring-slate-200 divide-y divide-slate-100 max-h-64 overflow-auto">
+      <div v-if="!memberCandidates.length" class="text-sm text-slate-400 px-3 py-3 text-center">
+        {{ memberQuery.trim() ? '검색 결과가 없습니다.' : '추가할 수 있는 회원이 없습니다.' }}
+      </div>
+      <button v-for="m in memberCandidates" :key="m.id" type="button"
+              class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-slate-50"
+              @click="addMember(m)">
+        <span class="flex-1 min-w-0">
+          <span class="font-medium text-slate-900">{{ m.name }}</span>
+          <span class="block small muted truncate mono">{{ m.login_id }}<span v-if="m.contact"> · {{ m.contact }}</span></span>
+        </span>
+        <span class="btn btn-soft btn-sm shrink-0"><i data-lucide="plus"></i> 추가</span>
+      </button>
     </div>
+    <p class="small muted mt-2">검색해서 <b>추가</b>를 누르면 위 매칭 목록에 담깁니다. 칩의 ✕ 로 제거할 수 있습니다.</p>
+  </template>
+
+  <div class="flex items-center gap-3 mt-4">
+    <button class="btn btn-primary" type="button" @click="saveMembers" :disabled="memberSaving || !allMembers.length"><i data-lucide="check"></i> 담당자 저장</button>
+    <span v-if="memberMsg" class="text-mint small">{{ memberMsg }}</span>
+    <span v-if="memberErr" class="text-red-600 small">{{ memberErr }}</span>
   </div>
-</div>
+</div></div>

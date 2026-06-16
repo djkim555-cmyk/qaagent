@@ -97,12 +97,14 @@ table.tbl tr:hover td { background: #fafbfc; }
 .sev-Major   { background: #fff3e6; color: #c2660c; border-color: #f7d9b0; }
 .sev-Minor   { background: #fefce8; color: #a16207; border-color: #f0e3a8; }
 .sev-Nitpick { background: #f3f5f7; color: #6b7685; }
+.sev-success { background: var(--mint-bg); color: var(--mint-d); border-color: #bdebdc; }
 .reco-green  { background: var(--mint-bg); color: var(--mint-d); border-color: #bdebdc; }
 .reco-yellow { background: #fefce8; color: #a16207; border-color: #f0e3a8; }
 .reco-red    { background: #fee; color: #b91c1c; border-color: #f7c5c5; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .dot-문의 { background: #3b82f6; } .dot-오류 { background: #ef4444; }
 .dot-기능개선 { background: var(--mint); } .dot-제안 { background: #f59e0b; } .dot-미분류 { background: var(--mut-2); }
+.dot-성공 { background: var(--mint-d); }
 .st-열림 { color: #3b82f6; } .st-진행중 { color: #f59e0b; } .st-완료 { color: var(--mint-d); } .st-보류 { color: var(--mut); }
 .muted { color: var(--mut); } .small { font-size: 12px; }
 

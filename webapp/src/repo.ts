@@ -11,7 +11,8 @@ const n = (v: any): number => {
 const SEV_ORDER = `CASE severity WHEN 'Blocker' THEN 0 WHEN 'Major' THEN 1 WHEN 'Minor' THEN 2 ELSE 3 END`
 
 // 구분 코드(요청) / 상태 enum
-export const CATEGORIES = ['문의', '오류', '기능개선', '제안']
+//  '성공' = 페르소나가 문제 없이 완료한 태스크(이슈가 아니라 통과 기록). 리스트에 함께 노출한다.
+export const CATEGORIES = ['문의', '오류', '기능개선', '제안', '성공']
 export const STATUSES = ['열림', '진행중', '완료', '보류']
 
 // 이슈 유형 → 구분 자동 분류 기준(추천). 관리자는 이후 드롭다운으로 변경 가능.
@@ -28,21 +29,33 @@ export function categorizeType(type?: string): string {
   }
 }
 
-/* ───────────────────────── managers (프로젝트 관리자 / 접속자) ───────────────────────── */
+/* ───────────────────────── members (회원 / 접속자) ───────────────────────── */
+// 회원 목록(접속자관리) — 승인 대기 포함 전체. 매칭 프로젝트 수 동봉.
 export const listManagers = () =>
   db.prepare(
-    `SELECT m.id, m.name, m.contact, m.active, m.created_at,
-            (SELECT COUNT(*) FROM projects p WHERE p.manager_id = m.id) AS project_count
-       FROM managers m WHERE m.active = 1 ORDER BY m.created_at DESC`,
+    `SELECT m.id, m.login_id, m.name, m.contact, m.status, m.active, m.created_at,
+            (SELECT COUNT(*) FROM project_members pm WHERE pm.member_id = m.id) AS project_count
+       FROM managers m WHERE m.active = 1 ORDER BY (m.status='pending') DESC, m.created_at DESC`,
   ).all() as any[]
+// 승인·활성 회원만(담당자 후보·매칭 대상)
+export const listApprovedMembers = () =>
+  db.prepare(`SELECT id, login_id, name, contact FROM managers WHERE active = 1 AND status = 'approved' ORDER BY name`).all() as any[]
 export const getManager = (id: number) => db.prepare(`SELECT * FROM managers WHERE id = ? AND active = 1`).get(id) as any
-export const getManagerByPasswordHash = (hash: string) =>
-  db.prepare(`SELECT * FROM managers WHERE password_hash = ? AND active = 1`).get(hash) as any
-export const passwordHashExists = (hash: string): boolean =>
-  Boolean(db.prepare(`SELECT 1 FROM managers WHERE password_hash = ? AND active = 1`).get(hash))
-export function addManager(name: string, passwordHash: string, contact?: string): number {
-  const info = db.prepare(`INSERT INTO managers (name, contact, password_hash, created_at) VALUES (?, ?, ?, ?)`).run(name, s(contact), passwordHash, n(Date.now()))
+export const getMemberByLoginId = (loginId: string) =>
+  db.prepare(`SELECT * FROM managers WHERE login_id = ? AND active = 1`).get(String(loginId).trim().toLowerCase()) as any
+export const loginIdExists = (loginId: string): boolean =>
+  Boolean(db.prepare(`SELECT 1 FROM managers WHERE login_id = ? AND active = 1`).get(String(loginId).trim().toLowerCase()))
+// 회원가입 — 기본 status='pending'(승인 대기). 확정 회원 id 반환.
+export function addMember(loginId: string, name: string, passwordHash: string, contact?: string): number {
+  const info = db.prepare(`INSERT INTO managers (login_id, name, contact, password_hash, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)`)
+    .run(String(loginId).trim().toLowerCase(), name, s(contact), passwordHash, n(Date.now()))
   return Number(info.lastInsertRowid)
+}
+export function approveMember(id: number) {
+  db.prepare(`UPDATE managers SET status = 'approved' WHERE id = ?`).run(id)
+}
+export function setManagerName(id: number, name: string) {
+  db.prepare(`UPDATE managers SET name = ? WHERE id = ?`).run(name, id)
 }
 export function setManagerPassword(id: number, passwordHash: string) {
   db.prepare(`UPDATE managers SET password_hash = ? WHERE id = ?`).run(passwordHash, id)
@@ -50,10 +63,44 @@ export function setManagerPassword(id: number, passwordHash: string) {
 export function setManagerContact(id: number, contact?: string) {
   db.prepare(`UPDATE managers SET contact = ? WHERE id = ?`).run(s(contact), id)
 }
-// 비활성화 + 보유 프로젝트는 미배정(NULL)으로 풀어 최고관리자에게만 보이도록
+// 탈퇴: 비활성화 + 프로젝트 매칭 해제(+ 레거시 primary owner 해제)
 export function removeManager(id: number) {
-  db.prepare(`UPDATE projects SET manager_id = NULL WHERE manager_id = ?`).run(id)
-  db.prepare(`UPDATE managers SET active = 0 WHERE id = ?`).run(id)
+  db.exec('BEGIN')
+  try {
+    db.prepare(`DELETE FROM project_members WHERE member_id = ?`).run(id)
+    db.prepare(`UPDATE projects SET manager_id = NULL WHERE manager_id = ?`).run(id)
+    db.prepare(`UPDATE managers SET active = 0 WHERE id = ?`).run(id)
+    db.exec('COMMIT')
+  } catch (e) { db.exec('ROLLBACK'); throw e }
+}
+
+/* ─────────────────── project_members (프로젝트 ↔ 회원 매칭) ─────────────────── */
+// 프로젝트에 매칭된 승인·활성 회원(접근 권한 + 담당자 후보)
+export const listProjectMembers = (projectId: number) =>
+  db.prepare(
+    `SELECT m.id, m.login_id, m.name, m.contact
+       FROM project_members pm JOIN managers m ON m.id = pm.member_id
+      WHERE pm.project_id = ? AND m.active = 1 AND m.status = 'approved'
+      ORDER BY m.name`,
+  ).all(projectId) as any[]
+export const isProjectMember = (projectId: number, memberId: number): boolean =>
+  Boolean(db.prepare(`SELECT 1 FROM project_members WHERE project_id = ? AND member_id = ?`).get(projectId, memberId))
+// 프로젝트의 매칭 회원 집합을 주어진 목록으로 교체(승인·활성 회원만 반영).
+export function setProjectMembers(projectId: number, memberIds: number[]) {
+  const ids = Array.from(new Set(memberIds.map((x) => n(x)).filter((x) => x > 0)))
+  db.exec('BEGIN')
+  try {
+    db.prepare(`DELETE FROM project_members WHERE project_id = ?`).run(projectId)
+    const ins = db.prepare(`INSERT OR IGNORE INTO project_members (project_id, member_id, created_at) VALUES (?, ?, ?)`)
+    const valid = db.prepare(`SELECT 1 FROM managers WHERE id = ? AND active = 1 AND status = 'approved'`)
+    const now = n(Date.now())
+    for (const mid of ids) { if (valid.get(mid)) ins.run(projectId, mid, now) }
+    db.exec('COMMIT')
+  } catch (e) { db.exec('ROLLBACK'); throw e }
+}
+// 회원 1명을 프로젝트에 매칭(생성자 자동 매칭 등)
+export function addProjectMember(projectId: number, memberId: number) {
+  db.prepare(`INSERT OR IGNORE INTO project_members (project_id, member_id, created_at) VALUES (?, ?, ?)`).run(projectId, memberId, n(Date.now()))
 }
 
 /* ───────────────────────── projects ───────────────────────── */
@@ -68,9 +115,9 @@ const updateProjectStmt = db.prepare(`UPDATE projects SET name = ?, base_url = ?
 export function updateProject(id: number, p: { name: string; baseUrl: string; platform?: string; description?: string; guards?: string }) {
   updateProjectStmt.run(p.name, p.baseUrl, s(p.platform), s(p.description), s(p.guards), id)
 }
-// 프로젝트 목록 숨김 토글(소프트 숨김 — 데이터·실행 결과는 보존)
-export function setProjectHidden(id: number, hidden: boolean) {
-  db.prepare(`UPDATE projects SET hidden = ? WHERE id = ?`).run(hidden ? 1 : 0, id)
+// 프로젝트 목록 숨김 토글(소프트 숨김 — 데이터·실행 결과는 보존). B 레이어 → 동기화 메타 스탬프.
+export function setProjectHidden(id: number, hidden: boolean, updatedBy = 'local-admin') {
+  db.prepare(`UPDATE projects SET hidden = ?, updated_at = ?, updated_by = ? WHERE id = ?`).run(hidden ? 1 : 0, n(Date.now()), s(updatedBy), id)
 }
 // 최고관리자 전용: 프로젝트를 특정 관리자에게 지정(또는 NULL 해제)
 export function setProjectManager(id: number, managerId: number | null) {
@@ -93,8 +140,9 @@ export function setManagerProjects(managerId: number, projectIds: number[]) {
 }
 const PROJECT_SELECT = `SELECT p.*, m.name AS manager_name FROM projects p LEFT JOIN managers m ON m.id = p.manager_id`
 export const listProjects = () => db.prepare(`${PROJECT_SELECT} ORDER BY p.created_at DESC`).all() as any[]
-export const listProjectsByManager = (managerId: number) =>
-  db.prepare(`${PROJECT_SELECT} WHERE p.manager_id = ? ORDER BY p.created_at DESC`).all(managerId) as any[]
+// 회원이 매칭된 프로젝트만(접근 권한 = project_members 멤버십)
+export const listProjectsByManager = (memberId: number) =>
+  db.prepare(`${PROJECT_SELECT} WHERE p.id IN (SELECT project_id FROM project_members WHERE member_id = ?) ORDER BY p.created_at DESC`).all(memberId) as any[]
 export const getProject = (id: number) => db.prepare(`${PROJECT_SELECT} WHERE p.id = ?`).get(id) as any
 
 /* ─────────────────── project_personas (QA 인력 배정) ─────────────────── */
@@ -122,12 +170,16 @@ const setScenarioOwnerStmt = db.prepare(
 export function setScenarioOwner(path: string, managerId: number | null, projectId: number | null) {
   setScenarioOwnerStmt.run(s(path), ni(managerId), ni(projectId), n(Date.now()))
 }
-// path → manager_id (없는 path 는 키 없음 = 미등록/레거시)
-export function scenarioOwnerMap(): Record<string, number | null> {
-  const rows = db.prepare(`SELECT path, manager_id FROM scenario_owners`).all() as any[]
-  const m: Record<string, number | null> = {}
-  for (const r of rows) m[r.path] = r.manager_id == null ? null : Number(r.manager_id)
+// path → { managerId, projectId } (없는 path 는 키 없음 = 미등록/레거시)
+export function scenarioOwnerMap(): Record<string, { managerId: number | null; projectId: number | null }> {
+  const rows = db.prepare(`SELECT path, manager_id, project_id FROM scenario_owners`).all() as any[]
+  const m: Record<string, { managerId: number | null; projectId: number | null }> = {}
+  for (const r of rows) m[r.path] = { managerId: r.manager_id == null ? null : Number(r.manager_id), projectId: r.project_id == null ? null : Number(r.project_id) }
   return m
+}
+// 회원이 매칭된 프로젝트 id 집합(시나리오 가시성·접근 판정용)
+export function memberProjectIds(memberId: number): number[] {
+  return (db.prepare(`SELECT project_id FROM project_members WHERE member_id = ?`).all(memberId) as any[]).map((r) => Number(r.project_id))
 }
 
 /* ──────────────────────── developers ──────────────────────── */
@@ -180,6 +232,11 @@ const insertIssueStmt = db.prepare(
   `INSERT INTO issues (run_id, persona_id, title, severity, type, task, symptom, repro, expected, actual, impact, suggestion, evidence, confidence, category)
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 )
+// 성공(통과) 기록: 이슈가 아니므로 severity 는 NULL, 구분='성공', 상태는 '완료'로 둔다.
+const insertSuccessStmt = db.prepare(
+  `INSERT INTO issues (run_id, persona_id, title, severity, type, task, symptom, evidence, confidence, category, status)
+   VALUES (?, ?, ?, NULL, '성공', ?, ?, ?, ?, '성공', '완료')`,
+)
 // 에이전트가 재현단계를 배열/문자열 어느 쪽으로 주든 줄바꿈 구분 텍스트로 정규화
 const lines = (v: any): string | null => {
   if (v === undefined || v === null || v === '') return null
@@ -206,6 +263,14 @@ export function savePersonaResult(runId: string, persona: any, parsed: any) {
       s(it?.evidence), s(it?.confidence), s(category),
     )
   }
+  // 성공(문제없이 완료한) 태스크도 리스트에 노출 — 구분='성공'으로 함께 저장한다.
+  const successes = Array.isArray(parsed?.successes) ? parsed.successes : []
+  for (const sc of successes) {
+    const title = s(sc?.title) || s(sc?.task) || '정상 완료'
+    insertSuccessStmt.run(
+      runId, persona?.id ?? '?', title, s(sc?.task), s(sc?.summary), s(sc?.evidence), s(sc?.confidence) || '확인됨',
+    )
+  }
 }
 
 /* ─────────────────────────── 조회 ─────────────────────────── */
@@ -216,19 +281,22 @@ const personaRunsStmt = db.prepare(`SELECT * FROM persona_runs WHERE run_id = ? 
 const issuesStmt = db.prepare(`SELECT * FROM issues WHERE run_id = ? ORDER BY ${SEV_ORDER}`)
 
 export const listRuns = () => listRunsStmt.all() as any[]
+// 회원 매칭 프로젝트의 실행만(project_members 기반 접근)
 const listRunsByManagerStmt = db.prepare(
-  `SELECT r.*, p.name AS project_name FROM runs r JOIN projects p ON p.id = r.project_id WHERE p.manager_id = ? ORDER BY r.started_at DESC`,
+  `SELECT r.*, p.name AS project_name FROM runs r JOIN projects p ON p.id = r.project_id
+     WHERE p.id IN (SELECT project_id FROM project_members WHERE member_id = ?) ORDER BY r.started_at DESC`,
 )
-export const listRunsByManager = (managerId: number) => listRunsByManagerStmt.all(managerId) as any[]
+export const listRunsByManager = (memberId: number) => listRunsByManagerStmt.all(memberId) as any[]
 // 대시보드 최근 실행용 — 숨긴 프로젝트의 실행은 제외(JOIN 으로 숨김 외 프로젝트만).
 const listRunsVisibleStmt = db.prepare(
   `SELECT r.*, p.name AS project_name FROM runs r JOIN projects p ON p.id = r.project_id WHERE p.hidden = 0 ORDER BY r.started_at DESC`,
 )
 export const listRunsVisible = () => listRunsVisibleStmt.all() as any[]
 const listRunsByManagerVisibleStmt = db.prepare(
-  `SELECT r.*, p.name AS project_name FROM runs r JOIN projects p ON p.id = r.project_id WHERE p.manager_id = ? AND p.hidden = 0 ORDER BY r.started_at DESC`,
+  `SELECT r.*, p.name AS project_name FROM runs r JOIN projects p ON p.id = r.project_id
+     WHERE p.id IN (SELECT project_id FROM project_members WHERE member_id = ?) AND p.hidden = 0 ORDER BY r.started_at DESC`,
 )
-export const listRunsByManagerVisible = (managerId: number) => listRunsByManagerVisibleStmt.all(managerId) as any[]
+export const listRunsByManagerVisible = (memberId: number) => listRunsByManagerVisibleStmt.all(memberId) as any[]
 export const listRunsByProject = (projectId: number) => listRunsByProjectStmt.all(projectId) as any[]
 export const getRunRow = (id: string) => getRunStmt.get(id) as any
 export const getPersonaRuns = (runId: string) => personaRunsStmt.all(runId) as any[]
@@ -240,7 +308,7 @@ const projectIssuesStmt = db.prepare(
           pr.persona_name AS persona_name
    FROM issues i
    JOIN runs r ON r.id = i.run_id
-   LEFT JOIN developers d ON d.id = i.assignee_id
+   LEFT JOIN managers d ON d.id = i.assignee_id
    LEFT JOIN persona_runs pr ON pr.run_id = i.run_id AND pr.persona_id = i.persona_id
    WHERE r.project_id = ?
    ORDER BY ${SEV_ORDER}, i.id DESC`,
@@ -256,7 +324,7 @@ const getIssueStmt = db.prepare(
           pr.one_line_summary AS one_line_summary
      FROM issues i
      JOIN runs r ON r.id = i.run_id
-     LEFT JOIN developers d ON d.id = i.assignee_id
+     LEFT JOIN managers d ON d.id = i.assignee_id
      LEFT JOIN persona_runs pr ON pr.run_id = i.run_id AND pr.persona_id = i.persona_id
     WHERE i.id = ?`,
 )
@@ -268,8 +336,10 @@ export const issueProjectId = (id: number): number | null => {
   return r && r.pid != null ? Number(r.pid) : null
 }
 
-const updateTriageStmt = db.prepare(`UPDATE issues SET category = ?, assignee_id = ?, status = ?, memo = ? WHERE id = ?`)
-export function updateIssueTriage(id: number, t: { category?: any; assigneeId?: any; status?: any; memo?: any }) {
+// 트리아지 수정 시 동기화 메타(updated_at/updated_by)도 함께 찍는다(06_API계약서 §1·§6 — B 레이어 LWW).
+// updatedBy: 로컬 편집은 'local-admin'(기본), 클라우드 pull 적용은 원 편집자 이메일을 그대로 전달.
+const updateTriageStmt = db.prepare(`UPDATE issues SET category = ?, assignee_id = ?, status = ?, memo = ?, updated_at = ?, updated_by = ? WHERE id = ?`)
+export function updateIssueTriage(id: number, t: { category?: any; assigneeId?: any; status?: any; memo?: any }, updatedBy = 'local-admin') {
   const cur = db.prepare(`SELECT category, assignee_id, status, memo FROM issues WHERE id = ?`).get(id) as any
   if (!cur) return false
   updateTriageStmt.run(
@@ -277,9 +347,82 @@ export function updateIssueTriage(id: number, t: { category?: any; assigneeId?: 
     t.assigneeId === undefined ? cur.assignee_id : ni(t.assigneeId),
     t.status === undefined ? cur.status : s(t.status),
     t.memo === undefined ? cur.memo : s(t.memo),
+    n(Date.now()), s(updatedBy),
     id,
   )
   return true
+}
+
+/* ═══════════════════ 클라우드 동기화 데이터 레이어 (06_API계약서) ═══════════════════ */
+// 이 구역은 src/sync.ts(동기화기)가 쓰는 순수 DB 헬퍼다. 네트워크는 sync.ts 가 담당.
+
+// ── 커서/상태 (sync_state key-value) ──
+export const getSyncState = (key: string): string | null => {
+  const r = db.prepare(`SELECT value FROM sync_state WHERE key = ?`).get(key) as any
+  return r ? String(r.value) : null
+}
+export const setSyncState = (key: string, value: string) =>
+  db.prepare(`INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(key, String(value))
+// last_sync_at 워터마크(epoch ms). 미설정 시 0.
+export const getLastSyncAt = (): number => n(getSyncState('last_sync_at') ?? 0)
+export const setLastSyncAt = (ms: number) => setSyncState('last_sync_at', String(n(ms)))
+
+// ── A 데이터 push 번들: run 1건 + 하위 전체 + 소속 프로젝트 (POST /sync/ingest/run) ──
+export function getRunBundle(runId: string): any | null {
+  const run = getRunStmt.get(runId) as any
+  if (!run) return null
+  const project = run.project_id != null ? (db.prepare(`SELECT * FROM projects WHERE id = ?`).get(run.project_id) as any) : null
+  return {
+    project,
+    run,
+    persona_runs: personaRunsStmt.all(runId) as any[],
+    issues: issuesStmt.all(runId) as any[],
+  }
+}
+// 아직 클라우드에 발행되지 않은 run id 목록(로컬 sync_state 의 발행표시 기준). 발행표시는 sync.ts 가 markRunPublished 로 남긴다.
+export const markRunPublished = (runId: string) => setSyncState('run_pub:' + runId, '1')
+export const isRunPublished = (runId: string): boolean => getSyncState('run_pub:' + runId) === '1'
+export const listDoneRunIds = (): string[] =>
+  (db.prepare(`SELECT id FROM runs WHERE status = 'done' OR finished_at IS NOT NULL ORDER BY started_at`).all() as any[]).map((r) => String(r.id))
+
+// ── B(트리아지) 변경 델타: since 이후 로컬에서 바뀐 행 (POST /sync/triage push) ──
+export function triageChangedSince(since: number): { issues: any[]; projects: any[] } {
+  return {
+    issues: db.prepare(
+      `SELECT id, category, assignee_id, status, memo, updated_at, updated_by, deleted FROM issues WHERE updated_at IS NOT NULL AND updated_at > ?`,
+    ).all(n(since)) as any[],
+    projects: db.prepare(
+      `SELECT id, hidden, updated_at, updated_by, deleted FROM projects WHERE updated_at IS NOT NULL AND updated_at > ?`,
+    ).all(n(since)) as any[],
+  }
+}
+
+// ── B(트리아지) pull 적용: 클라우드에서 받은 행을 행단위 LWW 로 로컬에 흡수 (§6) ──
+// 규칙: 들어온 updated_at 가 로컬보다 클 때만 채택(같거나 작으면 무시). 채택/거절 id 반환.
+export function applyTriagePull(rows: { issues?: any[]; projects?: any[] }): { applied: any; rejected_stale: any } {
+  const appliedIssues: number[] = [], rejIssues: number[] = []
+  const appliedProjects: number[] = [], rejProjects: number[] = []
+  db.exec('BEGIN')
+  try {
+    for (const it of rows.issues ?? []) {
+      const cur = db.prepare(`SELECT updated_at FROM issues WHERE id = ?`).get(n(it.id)) as any
+      if (!cur) { rejIssues.push(n(it.id)); continue } // 본문 없는 이슈는 로컬에 먼저 ingest 되어야 함
+      if (n(cur.updated_at) >= n(it.updated_at)) { rejIssues.push(n(it.id)); continue } // LWW: 로컬이 최신
+      db.prepare(`UPDATE issues SET category = ?, assignee_id = ?, status = ?, memo = ?, updated_at = ?, updated_by = ?, deleted = ? WHERE id = ?`)
+        .run(s(it.category), ni(it.assignee_id), s(it.status), s(it.memo), n(it.updated_at), s(it.updated_by), it.deleted ? 1 : 0, n(it.id))
+      appliedIssues.push(n(it.id))
+    }
+    for (const p of rows.projects ?? []) {
+      const cur = db.prepare(`SELECT updated_at FROM projects WHERE id = ?`).get(n(p.id)) as any
+      if (!cur) { rejProjects.push(n(p.id)); continue }
+      if (n(cur.updated_at) >= n(p.updated_at)) { rejProjects.push(n(p.id)); continue }
+      db.prepare(`UPDATE projects SET hidden = ?, updated_at = ?, updated_by = ?, deleted = ? WHERE id = ?`)
+        .run(p.hidden ? 1 : 0, n(p.updated_at), s(p.updated_by), p.deleted ? 1 : 0, n(p.id))
+      appliedProjects.push(n(p.id))
+    }
+    db.exec('COMMIT')
+  } catch (e) { db.exec('ROLLBACK'); throw e }
+  return { applied: { issues: appliedIssues, projects: appliedProjects }, rejected_stale: { issues: rejIssues, projects: rejProjects } }
 }
 
 /* ───────────────────── 인사이트 / 통계 ───────────────────── */
@@ -306,8 +449,8 @@ export function dashboardStats(weekCutoffMs: number, managerId: number | null = 
   // managerId 는 서명된 쿠키에서 온 정수 → n() 으로 정수 보장 후 인라인(node:sqlite 혼합 바인딩 회피)
   // 숨긴 프로젝트는 대시보드 집계·최근 실행에서 모두 제외(보이지 않게 한다).
   const notHidden = ` AND r.project_id NOT IN (SELECT id FROM projects WHERE hidden = 1)`
-  const own = (managerId == null ? '' : ` AND r.project_id IN (SELECT id FROM projects WHERE manager_id = ${n(managerId)})`) + notHidden
-  const ownP = managerId == null ? ` WHERE hidden = 0` : ` WHERE manager_id = ${n(managerId)} AND hidden = 0`
+  const own = (managerId == null ? '' : ` AND r.project_id IN (SELECT project_id FROM project_members WHERE member_id = ${n(managerId)})`) + notHidden
+  const ownP = managerId == null ? ` WHERE hidden = 0` : ` WHERE hidden = 0 AND id IN (SELECT project_id FROM project_members WHERE member_id = ${n(managerId)})`
   const active = (db.prepare(`SELECT COUNT(*) c FROM runs r WHERE r.status IN ('pending','running','synthesizing')${own}`).get() as any).c
   const openP1 = (db.prepare(`SELECT COUNT(*) c FROM issues i JOIN runs r ON r.id = i.run_id WHERE i.severity IN ('Blocker','Major') AND COALESCE(i.status,'열림') != '완료'${own}`).get() as any).c
   const thisWeek = (db.prepare(`SELECT COUNT(*) c FROM runs r WHERE r.started_at >= ?${own}`).get(n(weekCutoffMs)) as any).c
@@ -322,8 +465,8 @@ const latestRunStmt = db.prepare(
   `SELECT id, scenario, status, launch_recommendation, p1_count, started_at FROM runs WHERE project_id = ? ORDER BY started_at DESC LIMIT 1`,
 )
 export function managerProjectsOverview(managerId: number | null = null) {
-  // 숨긴 프로젝트는 대시보드 프로젝트 카드에서도 제외한다.
-  const where = managerId == null ? ` WHERE p.hidden = 0` : ` WHERE p.manager_id = ${n(managerId)} AND p.hidden = 0`
+  // 숨긴 프로젝트는 대시보드 프로젝트 카드에서도 제외한다. 회원은 매칭된 프로젝트만.
+  const where = managerId == null ? ` WHERE p.hidden = 0` : ` WHERE p.hidden = 0 AND p.id IN (SELECT project_id FROM project_members WHERE member_id = ${n(managerId)})`
   const rows = db.prepare(
     `SELECT p.id, p.name, p.base_url, m.name AS manager_name,
             (SELECT COUNT(*) FROM runs r WHERE r.project_id = p.id) AS runs,

@@ -1,3 +1,4 @@
+import './env.js' // .env 로드는 반드시 config/auth import 보다 먼저 (process.env 선주입)
 import fs from 'node:fs'
 import path from 'node:path'
 import express from 'express'
@@ -6,9 +7,10 @@ import { PORT, PROJECT_ROOT, WEBAPP_ROOT, CONCURRENCY, MODEL, ENABLE_PLAYWRIGHT,
 import * as live from './runStore.js'
 import * as repo from './repo.js'
 import { startRun } from './orchestrator.js'
-import { authenticate, isSuperPassword, hashPassword, issueCookie, clearAuthCookie, requireApi, requireSuper, type Identity } from './auth.js'
+import { authenticate, isReservedLoginId, hashPassword, issueCookie, clearAuthCookie, requireApi, requireSuper, SUPER_ID, type Identity } from './auth.js'
 import { generatePersonas, chatPersona, chatScenario, saveScenarioFile, readScenarioFile } from './llm.js'
 import * as pool from './personaPool.js'
+import * as sync from './sync.js'
 
 const app = express()
 const PUBLIC_DIR = path.join(WEBAPP_ROOT, 'public')
@@ -55,12 +57,39 @@ function validateProjectInput(body: any): { name: string; baseUrl: string } | { 
 }
 
 /* ───────────────── 인증 (게이트 앞단) ───────────────── */
+// 로그인 아이디 형식: 영문/숫자/._- 4~20자 (소문자 정규화는 auth/repo 에서)
+const LOGIN_ID_RE = /^[A-Za-z0-9._-]{4,20}$/
+function validateSignup(body: any): { loginId: string; name: string; password: string; contact: string } | { error: string } {
+  const loginId = String(body?.loginId ?? '').trim()
+  const name = String(body?.name ?? '').trim()
+  const password = String(body?.password ?? '')
+  const contact = String(body?.contact ?? '').trim()
+  if (!name) return { error: '이름을 입력하세요.' }
+  if (!LOGIN_ID_RE.test(loginId)) return { error: '아이디는 영문/숫자/._- 조합 4~20자로 입력하세요.' }
+  if (isReservedLoginId(loginId)) return { error: '사용할 수 없는 아이디입니다.' }
+  if (password.length < 4) return { error: '비밀번호는 4자 이상이어야 합니다.' }
+  return { loginId, name, password, contact }
+}
+
 app.post('/api/login', (req, res) => {
-  const id = authenticate(req.body?.password)
-  if (!id) return fail(res, 401, '비밀번호가 올바르지 않습니다.')
-  issueCookie(res, id)
-  res.json({ ok: true, role: id.role })
+  const r = authenticate(req.body?.loginId, req.body?.password)
+  if (r.identity) {
+    issueCookie(res, r.identity)
+    return res.json({ ok: true, role: r.identity.role })
+  }
+  if (r.pending) return fail(res, 403, '가입 승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다.')
+  return fail(res, 401, '아이디 또는 비밀번호가 올바르지 않습니다.')
 })
+
+// 회원가입 — 누구나(공개). 가입 직후 status='pending' → 슈퍼관리자 승인 후 로그인 가능.
+app.post('/api/signup', (req, res) => {
+  const v = validateSignup(req.body)
+  if ('error' in v) return fail(res, 400, v.error)
+  if (repo.loginIdExists(v.loginId)) return fail(res, 409, '이미 사용 중인 아이디입니다.')
+  repo.addMember(v.loginId, v.name, hashPassword(v.password), v.contact || undefined)
+  res.json({ ok: true, message: '가입이 접수되었습니다. 관리자 승인 후 로그인할 수 있습니다.' })
+})
+
 app.post('/api/logout', (_req, res) => { clearAuthCookie(res); res.json({ ok: true }) })
 
 // 이후 모든 /api/* 는 인증 필요 (미인증 → 401). 통과 시 req.identity 부착.
@@ -71,19 +100,30 @@ app.get('/api/auth/check', (req, res) => res.json({ authed: true, role: ident(re
 
 /* helper */
 const ident = (req: Request): Identity => (req as any).identity as Identity
-// 관리자는 자기 소유 프로젝트만 접근. 최고관리자는 전부.
-const canSeeProject = (id: Identity, project: any) => id.role === 'super' || Number(project?.manager_id) === id.managerId
+// 회원은 매칭된(project_members) 프로젝트만 접근. 슈퍼관리자는 전부.
+const canSeeProject = (id: Identity, project: any) =>
+  id.role === 'super' || (id.managerId != null && repo.isProjectMember(Number(project?.id), id.managerId))
 
-// 로그인한 관리자가 등록한 시나리오만(최고관리자는 전부). 미등록/레거시 파일은 최고관리자만 본다.
+// 회원은 자신이 등록한 시나리오 또는 자신이 매칭된 프로젝트의 시나리오만(슈퍼관리자는 전부).
+// 미등록/레거시 파일은 슈퍼관리자만 본다.
 const scenariosFor = (id: Identity): string[] => {
   const all = listScenarioFiles()
   if (id.role === 'super') return all
   const owners = repo.scenarioOwnerMap()
-  return all.filter((p) => owners[p] === id.managerId)
+  const myProjects = id.managerId == null ? [] : repo.memberProjectIds(id.managerId)
+  return all.filter((p) => {
+    const o = owners[p]
+    return o && (o.managerId === id.managerId || (o.projectId != null && myProjects.includes(o.projectId)))
+  })
 }
-// 시나리오 접근(읽기/실행) 권한: 최고관리자 전부, 관리자는 자신이 등록한 것만
-const canSeeScenario = (id: Identity, p: string): boolean =>
-  id.role === 'super' || repo.scenarioOwnerMap()[p] === id.managerId
+// 시나리오 접근(읽기/실행) 권한: 슈퍼관리자 전부, 회원은 자신 등록분 또는 매칭 프로젝트의 것
+const canSeeScenario = (id: Identity, p: string): boolean => {
+  if (id.role === 'super') return true
+  const o = repo.scenarioOwnerMap()[p]
+  if (!o) return false
+  if (o.managerId === id.managerId) return true
+  return o.projectId != null && id.managerId != null && repo.memberProjectIds(id.managerId).includes(o.projectId)
+}
 
 function loadProject(req: Request, res: Response) {
   const p = repo.getProject(Number(req.params.id))
@@ -181,6 +221,9 @@ app.post('/api/projects', (req, res) => {
     if (managerId != null && !repo.getManager(managerId)) return fail(res, 400, '지정한 관리자를 찾을 수 없습니다.')
   }
   const newId = repo.createProject({ name, baseUrl, platform, description, managerId, createdAt: Date.now() })
+  // 생성자(또는 지정 관리자)를 프로젝트에 자동 매칭 → 즉시 접근 가능
+  if (id.role === 'manager') repo.addProjectMember(newId, id.managerId as number)
+  else if (managerId != null) repo.addProjectMember(newId, managerId)
   res.json({ id: newId })
 })
 
@@ -224,35 +267,36 @@ app.get('/api/projects/:id/qa', (req, res) => {
     project,
     issues: repo.listProjectIssues(project.id),
     runs: repo.listRunsByProject(project.id),
-    developers: repo.listDevelopers(),
+    developers: repo.listProjectMembers(project.id),   // 담당자 후보 = 이 프로젝트에 매칭된 회원
     categories: repo.CATEGORIES,
     statuses: repo.STATUSES,
   })
 })
 
-// 프로젝트 담당자 CRUD (Stage A: 전역 developers 테이블 위임 — Stage B 에서 프로젝트 스코프로 전환)
-app.get('/api/projects/:id/developers', (req, res) => {
+// 프로젝트 담당자 = 매칭된 회원. 프로젝트 설정의 '담당자 관리' 와 접속자관리의 '프로젝트 매칭' 이 공유.
+//  GET: 현재 매칭된 회원 + 선택 가능한 승인 회원 전체
+app.get('/api/projects/:id/members', (req, res) => {
   const project = loadProject(req, res); if (!project) return
-  res.json({ developers: repo.listDevelopers() })
+  res.json({
+    project,
+    members: repo.listProjectMembers(project.id),
+    allMembers: repo.listApprovedMembers(),
+    memberIds: repo.listProjectMembers(project.id).map((m: any) => m.id),
+  })
 })
-app.post('/api/projects/:id/developers', (req, res) => {
+//  PUT: 매칭 회원 집합 교체 (슈퍼관리자 또는 이 프로젝트의 현재 매칭 회원)
+app.put('/api/projects/:id/members', (req, res) => {
   const project = loadProject(req, res); if (!project) return
-  const name = String(req.body?.name ?? '').trim()
-  if (!name) return fail(res, 400, '이름을 입력하세요.')
-  repo.addDeveloper(name, req.body?.email)
-  res.json({ ok: true, developers: repo.listDevelopers() })
-})
-app.delete('/api/projects/:id/developers/:devId', (req, res) => {
-  const project = loadProject(req, res); if (!project) return
-  repo.removeDeveloper(Number(req.params.devId))
-  res.json({ ok: true })
+  const raw = Array.isArray(req.body?.memberIds) ? req.body.memberIds : []
+  const ids = raw.map((x: any) => Number(x)).filter((x: number) => Number.isFinite(x) && x > 0)
+  repo.setProjectMembers(project.id, ids)
+  res.json({ ok: true, members: repo.listProjectMembers(project.id) })
 })
 
 app.get('/api/projects/:id/settings', (req, res) => {
   const project = loadProject(req, res); if (!project) return
   const id = ident(req)
-  // 최고관리자는 관리자 지정 드롭다운을 위해 관리자 목록을 함께 받는다.
-  res.json({ project, role: id.role, managers: id.role === 'super' ? repo.listManagers() : [] })
+  res.json({ project, role: id.role })
 })
 app.post('/api/projects/:id/settings', (req, res) => {
   const project = loadProject(req, res); if (!project) return
@@ -261,58 +305,70 @@ app.post('/api/projects/:id/settings', (req, res) => {
   const v = validateProjectInput(req.body)
   if ('error' in v) return fail(res, 400, v.error)
   repo.updateProject(project.id, { name: v.name, baseUrl: v.baseUrl, platform, description, guards })
-  // 프로젝트→관리자 지정은 최고관리자만
-  if (ident(req).role === 'super' && 'managerId' in (req.body ?? {})) {
-    const raw = req.body.managerId
-    const mid = raw === '' || raw == null ? null : Number(raw)
-    if (mid != null && !repo.getManager(mid)) return fail(res, 400, '지정한 관리자를 찾을 수 없습니다.')
-    repo.setProjectManager(project.id, mid)
-  }
   res.json({ ok: true })
 })
 
-app.get('/api/settings', (req, res) => res.json({ developers: repo.listDevelopers(), env: { ...envInfo(), role: ident(req).role } }))
-
-/* ───────────────── 접속자(프로젝트 관리자) 관리 — 최고관리자 전용 ───────────────── */
-app.get('/api/managers', requireSuper, (_req, res) => res.json({ managers: repo.listManagers() }))
-app.post('/api/managers', requireSuper, (req, res) => {
-  const name = String(req.body?.name ?? '').trim()
-  const password = String(req.body?.password ?? '')
-  const contact = String(req.body?.contact ?? '').trim()
-  if (!name) return fail(res, 400, '이름(프로젝트명)을 입력하세요.')
-  if (password.length < 4) return fail(res, 400, '비밀번호는 4자 이상이어야 합니다.')
-  if (isSuperPassword(password)) return fail(res, 400, '최고관리자 비밀번호와 동일하게 설정할 수 없습니다.')
-  const hash = hashPassword(password)
-  if (repo.passwordHashExists(hash)) return fail(res, 409, '이미 사용 중인 비밀번호입니다. 다른 비밀번호를 사용하세요.')
-  const id = repo.addManager(name, hash, contact || undefined)
-  res.json({ id })
+app.get('/api/settings', (req, res) => {
+  const id = ident(req)
+  const me = id.role === 'super' ? { role: 'super', name: '슈퍼관리자', loginId: SUPER_ID } : (() => {
+    const m = id.managerId != null ? repo.getManager(id.managerId) : null
+    return { role: 'manager', name: m?.name || '', loginId: m?.login_id || '' }
+  })()
+  res.json({ me, env: { ...envInfo(), role: id.role } })
 })
-app.patch('/api/managers/:id', requireSuper, (req, res) => {
-  const m = repo.getManager(Number(req.params.id))
-  if (!m) return fail(res, 404, '관리자를 찾을 수 없습니다.')
+
+// 내 정보 변경 (이름·비밀번호) — 로그인한 회원 본인. 슈퍼관리자는 DB 계정이 없어 불가.
+app.patch('/api/me', (req, res) => {
+  const id = ident(req)
+  if (id.role !== 'manager' || id.managerId == null) return fail(res, 403, '회원 계정만 변경할 수 있습니다.')
+  if ('name' in (req.body ?? {})) {
+    const name = String(req.body.name ?? '').trim()
+    if (!name) return fail(res, 400, '이름을 입력하세요.')
+    repo.setManagerName(id.managerId, name)
+  }
   const password = req.body?.password
   if (password != null && password !== '') {
     if (String(password).length < 4) return fail(res, 400, '비밀번호는 4자 이상이어야 합니다.')
-    if (isSuperPassword(String(password))) return fail(res, 400, '최고관리자 비밀번호와 동일하게 설정할 수 없습니다.')
-    const hash = hashPassword(String(password))
-    const owner = repo.getManagerByPasswordHash(hash)
-    if (owner && Number(owner.id) !== m.id) return fail(res, 409, '이미 사용 중인 비밀번호입니다.')
-    repo.setManagerPassword(m.id, hash)
+    repo.setManagerPassword(id.managerId, hashPassword(String(password)))
   }
-  // 연락처(이메일/슬랙) 변경 — 필드가 오면 반영(빈 문자열이면 해제)
+  res.json({ ok: true })
+})
+
+/* ───────────────── 접속자(회원) 관리 — 슈퍼관리자 전용 ───────────────── */
+app.get('/api/managers', requireSuper, (_req, res) => res.json({ managers: repo.listManagers() }))
+// 가입 승인
+app.post('/api/managers/:id/approve', requireSuper, (req, res) => {
+  const m = repo.getManager(Number(req.params.id))
+  if (!m) return fail(res, 404, '회원을 찾을 수 없습니다.')
+  repo.approveMember(m.id)
+  res.json({ ok: true })
+})
+// 회원 정보 변경 (이름·연락처·비밀번호 초기화)
+app.patch('/api/managers/:id', requireSuper, (req, res) => {
+  const m = repo.getManager(Number(req.params.id))
+  if (!m) return fail(res, 404, '회원을 찾을 수 없습니다.')
+  if ('name' in (req.body ?? {})) {
+    const name = String(req.body.name ?? '').trim()
+    if (!name) return fail(res, 400, '이름을 입력하세요.')
+    repo.setManagerName(m.id, name)
+  }
+  const password = req.body?.password
+  if (password != null && password !== '') {
+    if (String(password).length < 4) return fail(res, 400, '비밀번호는 4자 이상이어야 합니다.')
+    repo.setManagerPassword(m.id, hashPassword(String(password)))
+  }
   if ('contact' in (req.body ?? {})) repo.setManagerContact(m.id, String(req.body.contact ?? '').trim() || undefined)
   res.json({ ok: true })
 })
-// 관리자의 담당 프로젝트 일괄 지정(복수 선택) — 목록에 없는 기존 담당분은 미배정 처리
-app.put('/api/managers/:id/projects', requireSuper, (req, res) => {
-  const m = repo.getManager(Number(req.params.id))
-  if (!m) return fail(res, 404, '관리자를 찾을 수 없습니다.')
-  const raw = Array.isArray(req.body?.projectIds) ? req.body.projectIds : []
-  const ids = raw.map((x: any) => Number(x)).filter((x: number) => Number.isFinite(x) && x > 0)
-  repo.setManagerProjects(m.id, ids)
-  res.json({ ok: true })
-})
+// 탈퇴 (비활성화 + 매칭 해제)
 app.delete('/api/managers/:id', requireSuper, (req, res) => { repo.removeManager(Number(req.params.id)); res.json({ ok: true }) })
+
+// ── 클라우드 동기화 진단/수동 트리거 (최고관리자 전용) ──
+app.get('/api/sync/status', requireSuper, (_req, res) => res.json(sync.status()))
+app.post('/api/sync/now', requireSuper, async (_req, res) => {
+  if (!sync.isEnabled()) return fail(res, 409, '동기화 비활성 — CLOUD_SYNC_URL/SYNC_TOKEN 미설정')
+  res.json(await sync.syncCycle())
+})
 
 /* ───────────────── 실행(run) API ───────────────── */
 app.post('/api/runs', (req, res) => {
@@ -396,11 +452,20 @@ app.get('/api/issues/:id', (req, res) => {
     const p = issue.project_id ? repo.getProject(Number(issue.project_id)) : null
     if (!p || !canSeeProject(id, p)) return fail(res, 403, '이 이슈에 접근할 권한이 없습니다.')
   }
-  const shots = (issue.run_id && issue.persona_id ? listShots(issue.run_id, issue.persona_id) : []).map((f) => ({
+  // 상세 화면에는 "실제 오류가 난 화면"만 보여준다 → 이 이슈의 evidence 에 파일명이 적힌 캡처만 노출.
+  //  - evidence 가 캡처 파일명을 명시 → 그 캡처들만
+  //  - evidence 는 있는데 파일명이 없음 → 노출 안 함(폴더의 단계별 캡처를 전부 쏟지 않는다)
+  //  - evidence 자체가 없음(레거시) → 폴더 전체로 폴백(증거를 잃지 않도록)
+  const allShots = issue.run_id && issue.persona_id ? listShots(issue.run_id, issue.persona_id) : []
+  const ev = String(issue.evidence || '')
+  const referenced = allShots.filter((f) => ev.includes(f))
+  const shotFiles = referenced.length ? referenced : ev.trim() ? [] : allShots
+  const shots = shotFiles.map((f) => ({
     file: f,
     url: `/api/runs/${encodeURIComponent(issue.run_id)}/shots/${encodeURIComponent(issue.persona_id)}/${encodeURIComponent(f)}`,
   }))
-  res.json({ issue, shots, developers: repo.listDevelopers(), categories: repo.CATEGORIES, statuses: repo.STATUSES })
+  const assignees = issue.project_id != null ? repo.listProjectMembers(Number(issue.project_id)) : []
+  res.json({ issue, shots, developers: assignees, categories: repo.CATEGORIES, statuses: repo.STATUSES })
 })
 
 // 스크린샷 이미지 서빙 (reports/runs 하위만 — 경로 탈출 방지)
@@ -531,4 +596,5 @@ app.listen(PORT, () => {
   if (auth.mode === 'apikey') console.log('  인증: ANTHROPIC_API_KEY 사용\n')
   else if (auth.mode === 'session') console.log('  인증: Claude 로그인 세션 사용 (API 키 없이 동작)\n')
   else console.log('  ⚠  인증 없음 — API 키 미설정 + Claude 로그인 세션 없음. QA 실행/LLM 생성이 실패합니다.\n     → 이 머신에서 `claude login` 으로 로그인하거나 .env 에 ANTHROPIC_API_KEY 를 넣으세요.\n')
+  sync.startSyncLoop() // 클라우드 동기화 — 미설정이면 "비활성" 로그만 찍고 통과
 })

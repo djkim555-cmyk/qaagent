@@ -1,10 +1,25 @@
 <div class="page-head"><h1>설정</h1></div>
 
+<!-- 내 정보 (로그인한 회원 본인) -->
+<div v-if="isMember" class="card max-w-[640px] mb-3"><div class="card-body">
+  <div class="card-h">내 정보</div>
+  <p class="small muted mb-3">아이디 <code class="mono text-xs bg-slate-100 rounded px-1">{{ me.loginId }}</code> · 이름과 비밀번호를 변경할 수 있습니다.</p>
+  <label class="label">이름</label>
+  <input class="input mb-3" v-model="name" placeholder="이름" />
+  <label class="label">새 비밀번호 <span class="text-slate-400 font-normal">(변경 시에만 입력 · 4자 이상)</span></label>
+  <input class="input" type="password" v-model="password" placeholder="••••" autocomplete="new-password" />
+  <div class="flex items-center gap-3 mt-4">
+    <button class="btn btn-primary" type="button" @click="saveProfile" :disabled="saving"><i data-lucide="check"></i> 저장</button>
+    <span v-if="msg" class="text-mint small">{{ msg }}</span>
+    <span v-if="err" class="text-red-600 small">{{ err }}</span>
+  </div>
+</div></div>
+
 <div class="card max-w-[640px]"><div class="card-body">
   <div class="card-h">시스템 정보</div>
   <div class="overflow-x-auto -mx-5">
     <table class="tbl"><tbody>
-      <tr><td>로그인</td><td class="text-right small muted">비밀번호 단독 — 최고관리자(<code class="mono text-xs bg-slate-100 rounded px-1">QA_PASSWORD</code>) + 프로젝트 관리자(접속자 관리)</td></tr>
+      <tr><td>로그인</td><td class="text-right small muted">ID/비밀번호 — 슈퍼관리자(전용 아이디 + <code class="mono text-xs bg-slate-100 rounded px-1">QA_PASSWORD</code>) + 회원가입(승인 후 로그인)</td></tr>
       <tr><td>모델</td><td class="text-right">{{ env.model }}</td></tr>
       <tr><td>브라우저 자동화</td><td class="text-right">{{ env.playwright ? '실제 브라우저(Playwright)' : '시뮬레이션' }}</td></tr>
       <tr><td>Agent SDK 인증</td><td class="text-right">{{ env.authMode === 'apikey' ? 'API 키' : env.authMode === 'session' ? 'Claude 로그인 세션 (키 불필요)' : '⚠ 없음 — claude login 또는 API 키 필요' }}</td></tr>
@@ -12,5 +27,5 @@
     </tbody></table>
   </div>
   <p class="small muted mt-3">데이터는 로컬 SQLite(<code class="mono text-xs bg-slate-100 rounded px-1">data/qa.db</code>)에 저장됩니다.</p>
-  <p class="small muted mt-2">담당자는 각 <b>프로젝트 › 설정</b> 탭에서 프로젝트별로 추가·관리합니다.</p>
+  <p class="small muted mt-2">회원 승인·탈퇴와 프로젝트별 담당자(회원) 매칭은 <b>접속자 관리</b>(슈퍼관리자)에서, 프로젝트별 담당자는 각 <b>프로젝트 › 설정</b>에서도 지정합니다.</p>
 </div></div>

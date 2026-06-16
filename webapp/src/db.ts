@@ -32,15 +32,27 @@ CREATE TABLE IF NOT EXISTS developers (
   active INTEGER NOT NULL DEFAULT 1
 );
 
--- 프로젝트 관리자(접속자) — 비밀번호 단독 로그인. 최고관리자는 env QA_PASSWORD 라 DB에 없음.
--- password_hash = HMAC(비밀번호) (auth.ts) — 평문 미저장, 전체 고유(로그인 식별 키).
+-- 회원(접속자) — ID/PW 회원가입 로그인. 슈퍼관리자는 env QA_PASSWORD 라 DB에 없음.
+-- login_id = 로그인 아이디(전체 고유). password_hash = HMAC(비밀번호) (auth.ts) — 평문 미저장.
+-- status: pending(가입 직후·미승인) | approved(승인됨·로그인 가능). active=0 = 탈퇴.
 CREATE TABLE IF NOT EXISTS managers (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  name          TEXT NOT NULL,
-  contact       TEXT,             -- 이메일/슬랙 등 연락처(선택) — 운영 조직 알림·연락용
-  password_hash TEXT NOT NULL UNIQUE,
+  login_id      TEXT,             -- 로그인 아이디(전체 고유, 부분 유니크 인덱스)
+  name          TEXT NOT NULL,    -- 표시 이름(가입 시 등록, 변경 가능)
+  contact       TEXT,             -- 이메일/슬랙 등 연락처(선택)
+  password_hash TEXT NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'pending',  -- pending | approved
   active        INTEGER NOT NULL DEFAULT 1,
   created_at    INTEGER NOT NULL
+);
+
+-- 프로젝트 ↔ 회원 매칭(다대다). 한 프로젝트에 여러 회원, 한 회원이 여러 프로젝트.
+-- 매칭 = 그 프로젝트 접근 권한 + QA 이슈 담당자 후보. (접속자관리 프로젝트매칭 / 프로젝트설정 담당자관리 공용)
+CREATE TABLE IF NOT EXISTS project_members (
+  project_id  INTEGER NOT NULL,
+  member_id   INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (project_id, member_id)
 );
 
 CREATE TABLE IF NOT EXISTS runs (
@@ -120,6 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_persona_runs_run ON persona_runs(run_id);
 CREATE INDEX IF NOT EXISTS idx_issues_run ON issues(run_id);
 CREATE INDEX IF NOT EXISTS idx_project_personas_project ON project_personas(project_id);
 CREATE INDEX IF NOT EXISTS idx_scenario_owners_manager ON scenario_owners(manager_id);
+CREATE INDEX IF NOT EXISTS idx_project_members_member ON project_members(member_id);
 `)
 
 // ── 경량 마이그레이션: 기존 DB에 누락된 컬럼 보강 ──
@@ -146,6 +159,42 @@ ensureColumn('issues', 'expected', 'expected TEXT')
 ensureColumn('issues', 'actual', 'actual TEXT')
 ensureColumn('issues', 'impact', 'impact TEXT')
 ensureColumn('issues', 'suggestion', 'suggestion TEXT')
+
+// ── 클라우드 양방향 동기화 메타(06_API계약서 §1) — 트리아지 레이어(B) 행에 부여 ──
+// updated_at(epoch ms, LWW 비교 기준) · updated_by('local-admin' | 이메일) · deleted(툼스톤 0/1)
+for (const t of ['issues', 'projects', 'project_members', 'developers']) {
+  ensureColumn(t, 'updated_at', 'updated_at INTEGER')
+  ensureColumn(t, 'updated_by', 'updated_by TEXT')
+  ensureColumn(t, 'deleted', 'deleted INTEGER NOT NULL DEFAULT 0')
+}
+// 동기화 커서/상태(key-value) — last_sync_at 등 단일 출처로 보관
+db.exec(`CREATE TABLE IF NOT EXISTS sync_state ( key TEXT PRIMARY KEY, value TEXT );`)
+// 트리아지 변경 델타 조회용 인덱스(updated_at 워터마크 스캔)
+db.exec(`CREATE INDEX IF NOT EXISTS idx_issues_updated ON issues(updated_at);`)
+
+// ── managers 재구축: 구버전(로그인=비밀번호, password_hash UNIQUE) → 신버전(login_id + status).
+//    login_id 컬럼이 없으면 구버전으로 보고 1회 재구축한다.
+const mgrCols = db.prepare(`PRAGMA table_info(managers)`).all() as any[]
+if (!mgrCols.some((c) => c.name === 'login_id')) {
+  db.exec('BEGIN')
+  try {
+    db.exec(`CREATE TABLE managers_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, login_id TEXT, name TEXT NOT NULL, contact TEXT,
+      password_hash TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL );`)
+    // 기존 관리자 → 회원으로 이관: 임시 login_id='user{id}'(이후 본인이 변경), 기존 계정은 승인 상태로 둔다.
+    db.exec(`INSERT INTO managers_new (id, login_id, name, contact, password_hash, status, active, created_at)
+             SELECT id, 'user' || id, name, contact, password_hash, 'approved', active, created_at FROM managers;`)
+    db.exec(`DROP TABLE managers;`)
+    db.exec(`ALTER TABLE managers_new RENAME TO managers;`)
+    // 기존 프로젝트 소유자(manager_id)를 project_members 로 이관(접근 권한 보존).
+    db.exec(`INSERT OR IGNORE INTO project_members (project_id, member_id, created_at)
+             SELECT id, manager_id, created_at FROM projects WHERE manager_id IS NOT NULL;`)
+    // 담당자 모델이 developers→회원 으로 바뀌므로, 잘못된 식별자 매칭 방지를 위해 기존 이슈 배정을 1회 초기화.
+    db.exec(`UPDATE issues SET assignee_id = NULL;`)
+    db.exec('COMMIT')
+  } catch (e) { db.exec('ROLLBACK'); throw e }
+}
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_managers_login ON managers(login_id) WHERE login_id IS NOT NULL;`)
 
 // 기존 미분류(category NULL) 이슈를 유형 기반 분류 기준으로 1회 백필.
 // 분류 기준: 기능버그→오류 · 콘텐츠→제안 · 사용성/접근성/성능/신뢰UX→기능개선 · 그 외→문의
