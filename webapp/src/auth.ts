@@ -11,13 +11,14 @@ import * as repo from './repo.js'
 const PUBLIC_DEFAULTS: Record<string, string[]> = {
   QA_PASSWORD: ['malgnqa'],
   QA_SESSION_SECRET: ['change-me', 'qa-agent-team-internal-secret-v1'],
+  QA_PW_PEPPER: ['change-me', 'qa-agent-team-internal-secret-v1'],
 }
-function requireSecret(name: 'QA_PASSWORD' | 'QA_SESSION_SECRET'): string {
+function requireSecret(name: string): string {
   const v = (process.env[name] || '').trim()
   if (!v) {
     throw new Error(`[auth] 필수 환경변수 ${name} 가 설정되지 않았습니다. webapp/.env 또는 시크릿에 설정하세요(보안상 기본값을 제공하지 않습니다).`)
   }
-  if (PUBLIC_DEFAULTS[name].includes(v)) {
+  if ((PUBLIC_DEFAULTS[name] || []).includes(v)) {
     throw new Error(`[auth] ${name} 가 공개된 기본값(${v})으로 설정되어 있습니다. 고유한 값으로 변경하세요.`)
   }
   return v
@@ -26,7 +27,11 @@ function requireSecret(name: 'QA_PASSWORD' | 'QA_SESSION_SECRET'): string {
 const SUPER_PASSWORD = requireSecret('QA_PASSWORD')
 // 슈퍼관리자 전용 로그인 아이디. 회원가입 시 이 아이디는 사용 금지. (비밀이 아니므로 기본값 'admin' 허용)
 export const SUPER_ID = (process.env.QA_ADMIN_ID || 'admin').trim().toLowerCase()
+// 세션 쿠키 서명 전용 시크릿. (이 값은 안전하게 회전 가능 — 회전 시 기존 로그인 세션만 만료된다)
 const SECRET = requireSecret('QA_SESSION_SECRET')
+// 비밀번호 해시 전용 PEPPER. 세션 시크릿과 분리해, 세션 시크릿을 회전해도 저장된 비밀번호 해시가 깨지지 않게 한다.
+// 서버 전용(쿠키/클라이언트로 전송 안 됨). 한번 정하면 회원 비번을 모두 재설정하지 않는 한 바꾸지 않는다.
+const PW_PEPPER = requireSecret('QA_PW_PEPPER')
 const COOKIE = 'qa_session'
 const MAX_AGE = 1000 * 60 * 60 * 24 * 7 // 7일
 
@@ -35,8 +40,9 @@ export type Identity = { role: 'super' | 'manager'; managerId: number | null }
 export type AuthResult = { identity: Identity | null; pending?: boolean }
 
 // 비밀번호 → HMAC 해시. DB 에는 평문이 아니라 이 해시만 저장.
+// 키는 PW_PEPPER(세션 시크릿과 분리) — 세션 시크릿 회전과 무관하게 해시가 일관된다.
 export function hashPassword(pw: string): string {
-  return crypto.createHmac('sha256', SECRET).update('pw:' + String(pw ?? '')).digest('hex')
+  return crypto.createHmac('sha256', PW_PEPPER).update('pw:' + String(pw ?? '')).digest('hex')
 }
 
 const SUPER_HASH = hashPassword(SUPER_PASSWORD)

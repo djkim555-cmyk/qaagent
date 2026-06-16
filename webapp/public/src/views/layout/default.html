@@ -15,6 +15,11 @@
       <a class="nav-link" :class="{ 'nav-active': ['projects','project-overview','project-personas','project-runs','run-detail','project-qa','qa-issue-detail','project-settings'].includes(currentRoute) }" href="#/projects"><i data-lucide="folder"></i> 프로젝트</a>
       <a class="nav-link" :class="{ 'nav-active': currentRoute === 'settings' }" href="#/settings"><i data-lucide="settings-2"></i> 설정</a>
     </nav>
+    <!-- 바로가기 -->
+    <div class="mt-4 mb-1 px-2 text-[11px] font-semibold text-slate-400">바로가기</div>
+    <nav class="flex flex-col gap-0.5">
+      <a class="nav-link" href="https://qa-viewer.djkim555.workers.dev" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i> QA리스트 공유하기</a>
+    </nav>
     <div class="flex-1"></div>
     <div class="text-[11px] text-slate-400 leading-relaxed px-2 mb-3">사내 QA 에이전트 콘솔<br />페르소나 기반 통합 QA</div>
     <!-- 접속자 관리: 최고관리자에게만 보임 (CSS 가 <html data-role="super"> 기준으로 표시 결정) -->

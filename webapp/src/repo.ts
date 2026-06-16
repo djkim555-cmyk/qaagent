@@ -385,6 +385,18 @@ export const isRunPublished = (runId: string): boolean => getSyncState('run_pub:
 export const listDoneRunIds = (): string[] =>
   (db.prepare(`SELECT id FROM runs WHERE status = 'done' OR finished_at IS NOT NULL ORDER BY started_at`).all() as any[]).map((r) => String(r.id))
 
+// ── 회원·매칭 복제(A, 로컬→클라우드 단방향): 뷰어 로그인 주체 + 프로젝트 접근권 ──
+// password_hash(HMAC)·status·active 포함 — 클라우드가 동일 로그인/격리를 재현하기 위함.
+export function getMembersForSync(): { members: any[]; memberships: any[] } {
+  const members = db.prepare(
+    `SELECT id, login_id, name, contact, password_hash, status, active FROM managers`,
+  ).all() as any[]
+  const memberships = db.prepare(
+    `SELECT project_id, member_id, created_at FROM project_members`,
+  ).all() as any[]
+  return { members, memberships }
+}
+
 // ── B(트리아지) 변경 델타: since 이후 로컬에서 바뀐 행 (POST /sync/triage push) ──
 export function triageChangedSince(since: number): { issues: any[]; projects: any[] } {
   return {

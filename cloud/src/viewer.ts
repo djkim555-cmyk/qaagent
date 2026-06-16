@@ -42,7 +42,7 @@ tailwind.config = { theme: { extend: {
       </nav>
     </div>
     <div class="flex items-center gap-3 shrink-0">
-      <span class="badge bg-slate-100 text-slate-500">읽기 + 트리아지</span>
+      <span class="badge bg-slate-100 text-slate-500">조회 + 트리아지 편집</span>
       <a href="/auth/logout" class="text-xs text-slate-400 hover:text-slate-600">로그아웃</a>
     </div>
   </header>
@@ -97,21 +97,45 @@ tailwind.config = { theme: { extend: {
     </div>
     <div v-if="run.summary" class="card p-4 mb-4 text-slate-700 whitespace-pre-line">{{ run.summary }}</div>
 
-    <h2 class="text-sm font-semibold text-slate-700 mb-2">이슈 ({{ issues.length }})</h2>
-    <div class="card overflow-hidden">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="text-sm font-semibold text-slate-700">이슈 ({{ issues.length }})</h2>
+      <span class="text-xs text-slate-400">변경 즉시 저장 · 다음 동기화 때 로컬에도 반영</span>
+    </div>
+    <div class="card overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-xs">
           <tr><th class="text-left font-medium px-4 py-2.5">제목</th><th class="text-left font-medium px-4 py-2.5">심각도</th>
           <th class="text-left font-medium px-4 py-2.5">구분</th><th class="text-left font-medium px-4 py-2.5">상태</th>
-          <th class="text-left font-medium px-4 py-2.5">담당</th></tr>
+          <th class="text-left font-medium px-4 py-2.5">담당자</th><th class="text-left font-medium px-4 py-2.5">메모</th></tr>
         </thead>
         <tbody>
-          <tr v-for="it in issues" :key="it.id" class="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" @click="go('#/issues/'+it.id)">
-            <td class="px-4 py-2.5 font-medium text-slate-800 max-w-md truncate">{{ it.title }}</td>
+          <tr v-for="it in issues" :key="it.id" class="border-t border-slate-100 hover:bg-slate-50 align-middle">
+            <td class="px-4 py-2.5 font-medium text-slate-800 max-w-sm">
+              <button class="text-left hover:text-primary-600 truncate block w-full" @click="go('#/issues/'+it.id)" :title="it.title">{{ it.title }}</button>
+            </td>
             <td class="px-4 py-2.5"><span class="badge" :class="sevCls(it.severity)">{{ it.severity || '—' }}</span></td>
-            <td class="px-4 py-2.5"><span class="badge bg-slate-100 text-slate-600">{{ it.category || '—' }}</span></td>
-            <td class="px-4 py-2.5"><span class="badge" :class="stCls(it.status)">{{ it.status || '열림' }}</span></td>
-            <td class="px-4 py-2.5 text-slate-600">{{ it.assignee_name || '미지정' }}</td>
+            <td class="px-4 py-2.5">
+              <select v-model="it.category" @change="saveRow(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
+                <option v-if="!CATS.includes(it.category)" :value="it.category">{{ it.category || '미분류' }}</option>
+                <option v-for="c in CATS" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </td>
+            <td class="px-4 py-2.5">
+              <select v-model="it.status" @change="saveRow(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
+                <option v-for="s in STS" :key="s" :value="s">{{ s }}</option>
+              </select>
+            </td>
+            <td class="px-4 py-2.5">
+              <select v-model="it.assignee_id" @change="saveRow(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
+                <option :value="null">미지정</option>
+                <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+            </td>
+            <td class="px-4 py-2.5 whitespace-nowrap">
+              <button class="btn-ghost h-7 px-2 text-xs" @click="openMemo(it)">메모<span v-if="it.memo" class="ml-1 text-primary-600">●</span></button>
+              <span v-if="savingRow[it.id]" class="ml-1 text-xs text-slate-400">저장 중…</span>
+              <span v-else-if="savedRow[it.id]" class="ml-1 text-xs text-emerald-600">✓</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -144,7 +168,7 @@ tailwind.config = { theme: { extend: {
           <select v-model="form.status" class="inp"><option v-for="s in STS" :key="s" :value="s">{{ s }}</option></select></div>
         <div><div class="lbl">담당자</div>
           <select v-model="form.assignee_id" class="inp"><option :value="null">미지정</option>
-            <option v-for="d in developers" :key="d.id" :value="d.id">{{ d.name }}</option></select></div>
+            <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option></select></div>
         <div><div class="lbl">메모</div>
           <textarea v-model="form.memo" rows="4" class="inp" placeholder="트리아지 메모…"></textarea></div>
         <button class="btn-primary w-full" :disabled="saving" @click="saveTriage">{{ saving ? '저장 중…' : '저장' }}</button>
@@ -153,6 +177,19 @@ tailwind.config = { theme: { extend: {
       </div>
     </div>
   </section>
+
+  <!-- 메모 편집 모달 -->
+  <div v-if="memo.open" class="fixed inset-0 bg-black/30 grid place-items-center z-50 px-4" @click.self="closeMemo">
+    <div class="card p-5 w-[440px] max-w-full shadow-2xl">
+      <div class="lbl mb-1">메모</div>
+      <div class="text-xs text-slate-400 mb-2 truncate">{{ memo.target && memo.target.title }}</div>
+      <textarea v-model="memo.draft" rows="5" class="inp" placeholder="트리아지 메모…"></textarea>
+      <div class="flex justify-end gap-2 mt-3">
+        <button class="btn-ghost" @click="closeMemo" :disabled="memo.saving">취소</button>
+        <button class="btn-primary" @click="saveMemo" :disabled="memo.saving">{{ memo.saving ? '저장 중…' : '저장' }}</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -160,8 +197,10 @@ const { createApp } = Vue
 createApp({
   data() { return {
     view:'home', loading:true, error:'', route:{},
-    projects:[], runs:[], run:{}, personas:[], issues:[], issue:{}, developers:[],
+    projects:[], runs:[], run:{}, personas:[], issues:[], issue:{}, members:[],
     projectsById:{},
+    savingRow:{}, savedRow:{},
+    memo:{ open:false, target:null, draft:'', saving:false },
     form:{ category:null, status:null, assignee_id:null, memo:'' }, saving:false, saved:false, saveErr:'',
     CATS:['문의','오류','기능개선','제안','성공'], STS:['열림','진행중','완료','보류'],
     fields:[ {k:'symptom',label:'현상'},{k:'repro',label:'재현 단계'},{k:'expected',label:'기대 동작'},
@@ -181,7 +220,8 @@ createApp({
   methods: {
     async api(path, opts) {
       const r = await fetch('/api'+path, Object.assign({ credentials:'include', headers:{'Content-Type':'application/json'} }, opts))
-      if (r.status===401) throw new Error('인증 필요 — Cloudflare Access 로그인이 필요합니다.')
+      if (r.status===401) { location.href = '/login'; throw new Error('로그인이 필요합니다.') }
+      if (r.status===403) throw new Error('접근 권한이 없습니다.')
       if (!r.ok) throw new Error('HTTP '+r.status)
       return r.json()
     },
@@ -209,10 +249,11 @@ createApp({
         else if (r.view==='run') {
           const d = await this.api('/runs/'+r.id); this.run = d.run||{}; this.personas = d.persona_runs||[]
           this.issues = (await this.api('/runs/'+r.id+'/issues')).issues || []
+          await this.loadMembers(this.run.project_id)
         }
         else if (r.view==='issue') {
           this.issue = await this.api('/issues/'+r.id)
-          if (!this.developers.length) this.developers = (await this.api('/developers')).developers || []
+          await this.loadMembers(this.issue.project_id)
           this.form = { category:this.issue.category, status:this.issue.status||'열림', assignee_id:this.issue.assignee_id??null, memo:this.issue.memo||'' }
           this.saved=false; this.saveErr=''
         }
@@ -225,6 +266,34 @@ createApp({
         const upd = await this.api('/issues/'+this.route.id+'/triage', { method:'PATCH', body:JSON.stringify(body) })
         this.issue = upd; this.saved = true
       } catch(e) { this.saveErr = e.message } finally { this.saving=false }
+    },
+    // 담당자 후보 = 이 프로젝트에 매칭된 회원
+    async loadMembers(projectId) {
+      if (projectId == null) { this.members = []; return }
+      try { this.members = (await this.api('/projects/'+projectId+'/members')).members || [] } catch(e) { this.members = [] }
+    },
+    // 리스트 인라인 저장(구분/상태/담당자) — 변경 즉시 PATCH
+    async saveRow(it) {
+      this.savingRow = Object.assign({}, this.savingRow, { [it.id]: true })
+      this.savedRow = Object.assign({}, this.savedRow, { [it.id]: false })
+      try {
+        const body = { category: it.category, status: it.status, assignee_id: it.assignee_id }
+        await this.api('/issues/'+it.id+'/triage', { method:'PATCH', body: JSON.stringify(body) })
+        this.savedRow = Object.assign({}, this.savedRow, { [it.id]: true })
+        setTimeout(() => { this.savedRow = Object.assign({}, this.savedRow, { [it.id]: false }) }, 1500)
+      } catch(e) { alert('저장 실패: ' + e.message) }
+      finally { this.savingRow = Object.assign({}, this.savingRow, { [it.id]: false }) }
+    },
+    openMemo(it) { this.memo = { open:true, target:it, draft: it.memo||'', saving:false } },
+    closeMemo() { if (this.memo.saving) return; this.memo = { open:false, target:null, draft:'', saving:false } },
+    async saveMemo() {
+      if (!this.memo.target) return
+      this.memo.saving = true
+      try {
+        await this.api('/issues/'+this.memo.target.id+'/triage', { method:'PATCH', body: JSON.stringify({ memo: this.memo.draft }) })
+        this.memo.target.memo = this.memo.draft
+        this.memo = { open:false, target:null, draft:'', saving:false }
+      } catch(e) { alert('저장 실패: ' + e.message); this.memo.saving = false }
     },
   },
   mounted() { window.addEventListener('hashchange', () => this.load()); this.load() },

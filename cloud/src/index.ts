@@ -7,19 +7,22 @@
 //   S3 트리아지 /api/issues/:id/triage (PATCH) → Access 이메일 = updated_by
 import { Hono } from 'hono'
 import { VIEWER_HTML } from './viewer'
-import { handleLogin, logout, sessionUser, loginPageHtml } from './auth'
+import { handleLogin, logout, sessionUser, loginPageHtml, type Identity } from './auth'
 
 export interface Env {
   DB: D1Database
   ASSETS?: R2Bucket // R2 활성화 후 바인딩(미활성 시 /api/assets 만 비활성)
   SYNC_TOKEN: string
   DEV_ALLOW_NO_ACCESS?: string
-  // 공유 비밀번호 게이트
-  VIEW_PASSWORD: string
-  SESSION_SECRET: string
+  // ── QA 에이전트팀 ID/PW 로그인 (auth.ts) ──
+  SESSION_SECRET: string   // 세션 쿠키 서명
+  SUPER_PASSWORD: string   // 슈퍼관리자 마스터 비밀번호(웹앱 QA_PASSWORD 와 동일)
+  PW_HASH_SECRET: string   // 회원 비밀번호 해시 검증(웹앱 QA_SESSION_SECRET 와 동일)
+  SUPER_ID?: string        // 슈퍼관리자 아이디(기본 'admin')
+  VIEW_PASSWORD?: string   // (구) 공유 비밀번호 — 미사용(하위호환 위해 남김)
 }
 
-const app = new Hono<{ Bindings: Env; Variables: { email: string } }>()
+const app = new Hono<{ Bindings: Env; Variables: { email: string; identity: Identity } }>()
 
 const json = (c: any, body: unknown, status = 200) => c.json(body as any, status)
 
@@ -31,14 +34,34 @@ app.use('/sync/*', async (c, next) => {
   if (!c.env.SYNC_TOKEN || token !== c.env.SYNC_TOKEN) return json(c, { error: 'unauthorized' }, 401)
   await next()
 })
-// S2/S3: 공유 비밀번호 세션. 미로그인 → 401. (updated_by 는 'shared')
+// S2/S3: ID/PW 세션. 미로그인 → 401. 신원(역할·회원ID)을 컨텍스트에 부착.
 app.use('/api/*', async (c, next) => {
-  let user = await sessionUser(c)
-  if (!user && c.env.DEV_ALLOW_NO_ACCESS === 'true') user = 'dev@local'
-  if (!user) return json(c, { error: 'unauthorized', message: '로그인이 필요합니다.' }, 401)
-  c.set('email', user)
+  let id = await sessionUser(c)
+  if (!id && c.env.DEV_ALLOW_NO_ACCESS === 'true') id = { role: 'super', memberId: null, label: 'dev@local' }
+  if (!id) return json(c, { error: 'unauthorized', message: '로그인이 필요합니다.' }, 401)
+  c.set('identity', id)
+  c.set('email', id.label) // 트리아지 updated_by 로 사용
   await next()
 })
+
+/* ───────────────── 접근 격리: 슈퍼=전체, 회원=매칭된 프로젝트만 ───────────────── */
+// 회원이 접근 가능한 프로젝트 id 집합. 슈퍼관리자(super)는 null = 전체 허용.
+async function accessibleProjectIds(c: any): Promise<Set<number> | null> {
+  const id = c.get('identity') as Identity
+  if (id.role === 'super') return null
+  if (id.memberId == null) return new Set()
+  const r = await c.env.DB.prepare(
+    `SELECT project_id FROM project_members WHERE member_id = ? AND COALESCE(deleted,0) = 0`,
+  ).bind(id.memberId).all()
+  return new Set((r.results as any[]).map((x) => Number(x.project_id)))
+}
+const canSee = (allow: Set<number> | null, projectId: any): boolean =>
+  allow === null || allow.has(Number(projectId))
+// run → project_id 해석(접근 판정용)
+async function runProjectId(c: any, runId: string): Promise<number | null> {
+  const r: any = await c.env.DB.prepare(`SELECT project_id FROM runs WHERE id = ?`).bind(runId).first()
+  return r ? (r.project_id == null ? null : Number(r.project_id)) : null
+}
 
 // 로그인 라우트(공유 비밀번호)
 app.get('/login', (c) => c.html(loginPageHtml()))
@@ -135,22 +158,71 @@ app.get('/sync/triage', async (c) => {
   return json(c, { now: Date.now(), issues, projects })
 })
 
-/* ───────────────── S2: 뷰어 조회 ───────────────── */
+/* ───────────────── S1: 회원·매칭 복제 (로컬→클라우드 단방향) ───────────────── */
+// 로그인 주체(managers)와 프로젝트 접근권(project_members)을 받아 그대로 반영한다.
+// members 는 id 기준 upsert, memberships 는 통째 교체(로컬이 원천 = single source of truth).
+app.post('/sync/members', async (c) => {
+  const b = await c.req.json<any>()
+  const members = (b?.members ?? []) as any[]
+  const memberships = (b?.memberships ?? []) as any[]
+  const stmts: D1PreparedStatement[] = []
+  for (const m of members) {
+    if (m?.id == null) continue
+    stmts.push(c.env.DB.prepare(
+      `INSERT INTO managers (id, login_id, name, contact, password_hash, status, active)
+       VALUES (?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET login_id=excluded.login_id, name=excluded.name, contact=excluded.contact,
+         password_hash=excluded.password_hash, status=excluded.status, active=excluded.active`,
+    ).bind(m.id, m.login_id ?? null, m.name ?? null, m.contact ?? null, m.password_hash ?? null,
+      m.status ?? 'pending', m.active == null ? 1 : (m.active ? 1 : 0)))
+  }
+  // 멤버십 전량 교체(탈퇴·매칭해제 반영). project_members 는 클라우드 트리아지 대상이 아니므로 안전.
+  stmts.push(c.env.DB.prepare(`DELETE FROM project_members`))
+  for (const pm of memberships) {
+    if (pm?.project_id == null || pm?.member_id == null) continue
+    stmts.push(c.env.DB.prepare(
+      `INSERT OR IGNORE INTO project_members (project_id, member_id, created_at) VALUES (?,?,?)`,
+    ).bind(pm.project_id, pm.member_id, pm.created_at ?? null))
+  }
+  await c.env.DB.batch(stmts)
+  return json(c, { ok: true, upserted: { members: members.length, memberships: memberships.length } })
+})
+
+/* ───────────────── S2: 뷰어 조회 (신원 기준 격리) ───────────────── */
 app.get('/api/projects', async (c) => {
-  const r = await c.env.DB.prepare(`SELECT * FROM projects WHERE deleted=0 AND hidden=0 ORDER BY created_at DESC`).all()
-  return json(c, { projects: r.results })
+  const allow = await accessibleProjectIds(c)
+  if (allow !== null && allow.size === 0) return json(c, { projects: [] })
+  const rows = (await c.env.DB.prepare(`SELECT * FROM projects WHERE deleted=0 AND hidden=0 ORDER BY created_at DESC`).all()).results as any[]
+  const projects = allow === null ? rows : rows.filter((p) => allow.has(Number(p.id)))
+  return json(c, { projects })
 })
 app.get('/api/projects/:id/runs', async (c) => {
+  const allow = await accessibleProjectIds(c)
+  if (!canSee(allow, c.req.param('id'))) return json(c, { error: 'forbidden', message: '접근 권한이 없는 프로젝트입니다.' }, 403)
   const r = await c.env.DB.prepare(`SELECT * FROM runs WHERE project_id=? ORDER BY started_at DESC`).bind(c.req.param('id')).all()
   return json(c, { runs: r.results })
 })
+// 담당자 후보 = 이 프로젝트에 매칭된 승인·활성 회원 (로컬 listProjectMembers 와 동일)
+app.get('/api/projects/:id/members', async (c) => {
+  const allow = await accessibleProjectIds(c)
+  if (!canSee(allow, c.req.param('id'))) return json(c, { error: 'forbidden', message: '접근 권한이 없는 프로젝트입니다.' }, 403)
+  const r = await c.env.DB.prepare(
+    `SELECT m.id, m.name, m.login_id FROM project_members pm JOIN managers m ON m.id = pm.member_id
+      WHERE pm.project_id = ? AND m.active = 1 AND m.status = 'approved' ORDER BY m.name`,
+  ).bind(c.req.param('id')).all()
+  return json(c, { members: r.results })
+})
 app.get('/api/runs/:id', async (c) => {
-  const run = await c.env.DB.prepare(`SELECT * FROM runs WHERE id=?`).bind(c.req.param('id')).first()
+  const run = await c.env.DB.prepare(`SELECT * FROM runs WHERE id=?`).bind(c.req.param('id')).first<any>()
   if (!run) return json(c, { error: 'not found' }, 404)
+  const allow = await accessibleProjectIds(c)
+  if (!canSee(allow, run.project_id)) return json(c, { error: 'forbidden', message: '접근 권한이 없는 실행입니다.' }, 403)
   const personas = (await c.env.DB.prepare(`SELECT * FROM persona_runs WHERE run_id=? ORDER BY persona_id`).bind(c.req.param('id')).all()).results
   return json(c, { run, persona_runs: personas })
 })
 app.get('/api/runs/:id/issues', async (c) => {
+  const allow = await accessibleProjectIds(c)
+  if (!canSee(allow, await runProjectId(c, c.req.param('id')))) return json(c, { error: 'forbidden', message: '접근 권한이 없는 실행입니다.' }, 403)
   const r = await c.env.DB.prepare(
     `SELECT i.*, d.name AS assignee_name FROM issues i LEFT JOIN managers d ON d.id=i.assignee_id
       WHERE i.run_id=? AND i.deleted=0 ORDER BY i.id DESC`,
@@ -165,8 +237,10 @@ app.get('/api/issues/:id', async (c) => {
        LEFT JOIN managers d ON d.id=i.assignee_id
        LEFT JOIN persona_runs pr ON pr.run_id=i.run_id AND pr.persona_id=i.persona_id
       WHERE i.id=?`,
-  ).bind(c.req.param('id')).first()
+  ).bind(c.req.param('id')).first<any>()
   if (!it) return json(c, { error: 'not found' }, 404)
+  const allow = await accessibleProjectIds(c)
+  if (!canSee(allow, it.project_id)) return json(c, { error: 'forbidden', message: '접근 권한이 없는 이슈입니다.' }, 403)
   return json(c, it)
 })
 app.get('/api/developers', async (c) => {
@@ -178,6 +252,14 @@ app.get('/api/developers', async (c) => {
 app.get('/api/assets/*', async (c) => {
   if (!c.env.ASSETS) return json(c, { error: 'r2_disabled', message: 'R2 미구성 — 리포트·스크린샷 조회는 R2 활성화 후 가능' }, 503)
   const key = c.req.path.replace(/^\/api\/assets\//, '')
+  // 자산 키는 runs/{runId}/... → 회원은 접근 가능한 실행의 자산만.
+  const allow = await accessibleProjectIds(c)
+  if (allow !== null) {
+    const mk = key.match(/^runs\/([^/]+)\//)
+    if (!mk || !canSee(allow, await runProjectId(c, decodeURIComponent(mk[1])))) {
+      return json(c, { error: 'forbidden', message: '접근 권한이 없는 자산입니다.' }, 403)
+    }
+  }
   const obj = await c.env.ASSETS.get(key)
   if (!obj) return json(c, { error: 'not found' }, 404)
   const headers = new Headers()
@@ -191,8 +273,11 @@ app.patch('/api/issues/:id/triage', async (c) => {
   const id = Number(c.req.param('id'))
   const t = await c.req.json<any>()
   const email = c.get('email')
-  const cur = await c.env.DB.prepare(`SELECT category, assignee_id, status, memo FROM issues WHERE id=?`).bind(id).first<any>()
+  const cur = await c.env.DB.prepare(`SELECT i.category, i.assignee_id, i.status, i.memo, r.project_id AS project_id
+                                        FROM issues i JOIN runs r ON r.id=i.run_id WHERE i.id=?`).bind(id).first<any>()
   if (!cur) return json(c, { error: 'not found' }, 404)
+  const allow = await accessibleProjectIds(c)
+  if (!canSee(allow, cur.project_id)) return json(c, { error: 'forbidden', message: '접근 권한이 없는 이슈입니다.' }, 403)
   await c.env.DB.prepare(
     `UPDATE issues SET category=?, assignee_id=?, status=?, memo=?, updated_at=?, updated_by=? WHERE id=?`,
   ).bind(

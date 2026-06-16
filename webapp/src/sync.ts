@@ -51,6 +51,15 @@ async function pushUnpublishedRuns(): Promise<number> {
   return count
 }
 
+// ── 회원·매칭 push: 뷰어 로그인 주체 + 프로젝트 접근권을 복제한다 (POST /sync/members) ──
+// 가입·승인·매칭 변경이 잦지 않으므로 매 사이클 전량 동기화(데이터가 작아 비용 무시 가능).
+export async function pushMembers(): Promise<boolean> {
+  if (!isEnabled()) return false
+  const data = repo.getMembersForSync()
+  await api('/sync/members', { method: 'POST', body: JSON.stringify(data) })
+  return true
+}
+
 // ── B push: since 이후 로컬 트리아지 변경을 올린다 (POST /sync/triage) ──
 export async function pushTriage(since: number): Promise<any> {
   if (!isEnabled()) return null
@@ -75,6 +84,7 @@ export async function syncCycle(): Promise<{ ok: boolean; reason?: string }> {
   running = true
   try {
     const since = repo.getLastSyncAt()
+    await pushMembers()
     await pushUnpublishedRuns()
     await pushTriage(since)
     const pulled = await pullTriage(since)
