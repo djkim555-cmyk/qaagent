@@ -7,19 +7,16 @@
 //   S3 트리아지 /api/issues/:id/triage (PATCH) → Access 이메일 = updated_by
 import { Hono } from 'hono'
 import { VIEWER_HTML } from './viewer'
-import { loginRedirect, callback, logout, sessionEmail, isAllowed, loginPageHtml } from './auth'
+import { handleLogin, logout, sessionUser, loginPageHtml } from './auth'
 
 export interface Env {
   DB: D1Database
   ASSETS?: R2Bucket // R2 활성화 후 바인딩(미활성 시 /api/assets 만 비활성)
   SYNC_TOKEN: string
   DEV_ALLOW_NO_ACCESS?: string
-  // Worker 내장 Google 로그인(Access 대체)
-  GOOGLE_CLIENT_ID: string
-  GOOGLE_CLIENT_SECRET: string
+  // 공유 비밀번호 게이트
+  VIEW_PASSWORD: string
   SESSION_SECRET: string
-  ALLOWED_EMAILS?: string
-  ALLOWED_DOMAIN?: string
 }
 
 const app = new Hono<{ Bindings: Env; Variables: { email: string } }>()
@@ -34,20 +31,18 @@ app.use('/sync/*', async (c, next) => {
   if (!c.env.SYNC_TOKEN || token !== c.env.SYNC_TOKEN) return json(c, { error: 'unauthorized' }, 401)
   await next()
 })
-// S2/S3: 세션(Google 로그인) 이메일 = 신원. 허용목록 외/미로그인 → 401.
+// S2/S3: 공유 비밀번호 세션. 미로그인 → 401. (updated_by 는 'shared')
 app.use('/api/*', async (c, next) => {
-  let email = await sessionEmail(c)
-  if (email && !isAllowed(c, email)) email = null // 허용목록에서 빠지면 즉시 차단
-  if (!email && c.env.DEV_ALLOW_NO_ACCESS === 'true') email = 'dev@local'
-  if (!email) return json(c, { error: 'unauthorized', message: '로그인이 필요합니다.' }, 401)
-  c.set('email', email)
+  let user = await sessionUser(c)
+  if (!user && c.env.DEV_ALLOW_NO_ACCESS === 'true') user = 'dev@local'
+  if (!user) return json(c, { error: 'unauthorized', message: '로그인이 필요합니다.' }, 401)
+  c.set('email', user)
   await next()
 })
 
-// 로그인 라우트(Google OIDC)
+// 로그인 라우트(공유 비밀번호)
 app.get('/login', (c) => c.html(loginPageHtml()))
-app.get('/auth/login', (c) => loginRedirect(c))
-app.get('/auth/callback', (c) => callback(c))
+app.post('/auth/login', (c) => handleLogin(c))
 app.get('/auth/logout', (c) => logout(c))
 
 /* ───────────────── S1: A 데이터 ingest (단방향 복제) ───────────────── */
@@ -218,8 +213,8 @@ app.get('/health', (c) => json(c, { ok: true }))
 app.get('*', async (c) => {
   const p = c.req.path
   if (p.startsWith('/api') || p.startsWith('/sync')) return json(c, { error: 'not found' }, 404)
-  const email = await sessionEmail(c)
-  if (!email && c.env.DEV_ALLOW_NO_ACCESS !== 'true') return c.redirect('/login')
+  const user = await sessionUser(c)
+  if (!user && c.env.DEV_ALLOW_NO_ACCESS !== 'true') return c.redirect('/login')
   return c.html(VIEWER_HTML)
 })
 app.notFound((c) => json(c, { error: 'not found' }, 404))
