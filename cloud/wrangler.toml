@@ -1,0 +1,30 @@
+# QA 클라우드 뷰어 Worker — Cloudflare 배포 설정 (M1 에서 값 채움)
+# 사내 STACK 표준: Hono on Workers + D1 + R2.
+name = "qa-viewer"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+# ── D1 (관계형 본체=조회 복제 + 트리아지 원장) ──
+# M1 에서: wrangler d1 create qa-viewer-db → 출력된 database_id 를 아래에 붙인다.
+[[d1_databases]]
+binding = "DB"
+database_name = "qa-viewer-db"
+database_id = "TODO_M1_에서_채움"
+
+# ── R2 (리포트 마크다운 + 스크린샷) ──
+# M1 에서: wrangler r2 bucket create qa-viewer-assets
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "qa-viewer-assets"
+
+[vars]
+# Access 미설정(로컬 dev) 시 조회/트리아지를 허용할지. 운영 배포에서는 반드시 "false".
+DEV_ALLOW_NO_ACCESS = "false"
+
+# ── 시크릿(코드/설정에 값 금지) ──
+# M1 에서: wrangler secret put SYNC_TOKEN   (로컬 동기화기와 공유하는 토큰)
+#          (Access 가 S2/S3 인증을 담당하므로 뷰어용 별도 시크릿은 없음)
+
+# 운영/스테이징 분리 예시:
+# [env.production]
+# vars = { DEV_ALLOW_NO_ACCESS = "false" }
