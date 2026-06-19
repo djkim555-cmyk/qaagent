@@ -91,13 +91,7 @@ tailwind.config = { theme: { extend: {
   <section v-else-if="view==='run'">
     <div class="flex items-center justify-between gap-3 mb-1">
       <h1 class="text-lg font-semibold tracking-tight">{{ shortScenario(run.scenario) }}</h1>
-      <div class="flex items-center gap-3 shrink-0">
-        <span v-if="savedMsg" class="text-xs" :class="savedErr ? 'text-red-600' : 'text-emerald-600'">{{ savedMsg }}</span>
-        <button class="btn-primary h-8 px-3 text-sm" :disabled="savingAll || !dirtyCount" @click="saveAll">
-          <span v-if="savingAll">저장 중…</span>
-          <span v-else>저장하기<span v-if="dirtyCount"> ({{ dirtyCount }})</span></span>
-        </button>
-      </div>
+      <span v-if="savedMsg" class="text-xs shrink-0" :class="savedErr ? 'text-red-600' : 'text-emerald-600'">{{ savedMsg }}</span>
     </div>
     <div class="flex flex-wrap items-center gap-2 mb-4 text-xs text-slate-500">
       <span class="badge" :class="runStatusCls(run.status)">{{ run.status }}</span>
@@ -108,7 +102,7 @@ tailwind.config = { theme: { extend: {
 
     <div class="flex items-center justify-between mb-2">
       <h2 class="text-sm font-semibold text-slate-700">이슈 ({{ issues.length }})</h2>
-      <span class="text-xs text-slate-400">변경 즉시 저장 · 다음 동기화 때 로컬에도 반영</span>
+      <span class="text-xs text-slate-400">구분·상태·담당자·메모 변경 즉시 저장 · 다음 동기화 때 로컬에도 반영</span>
     </div>
     <div class="card overflow-x-auto">
       <table class="w-full text-sm">
@@ -124,25 +118,25 @@ tailwind.config = { theme: { extend: {
             </td>
             <td class="px-4 py-2.5"><span class="badge" :class="sevCls(it.severity)">{{ it.severity || '—' }}</span></td>
             <td class="px-4 py-2.5">
-              <select v-model="it.category" @change="markDirty(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
+              <select v-model="it.category" @change="saveCell(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
                 <option v-if="!CATS.includes(it.category)" :value="it.category">{{ it.category || '미분류' }}</option>
                 <option v-for="c in CATS" :key="c" :value="c">{{ c }}</option>
               </select>
             </td>
             <td class="px-4 py-2.5">
-              <select v-model="it.status" @change="markDirty(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
+              <select v-model="it.status" @change="saveCell(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
                 <option v-for="s in STS" :key="s" :value="s">{{ s }}</option>
               </select>
             </td>
             <td class="px-4 py-2.5">
-              <select v-model="it.assignee_id" @change="markDirty(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
+              <select v-model="it.assignee_id" @change="saveCell(it)" class="rounded ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-primary-500 border-0 text-xs py-1 pl-2 pr-7 bg-white">
                 <option :value="null">미지정</option>
                 <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option>
               </select>
             </td>
             <td class="px-4 py-2.5 whitespace-nowrap">
               <button class="btn-ghost h-7 px-2 text-xs" @click="openMemo(it)">메모<span v-if="it.memo" class="ml-1 text-primary-600">●</span></button>
-              <span v-if="dirty[it.id]" class="ml-1 text-xs text-amber-600">변경됨</span>
+              <span v-if="savingId===it.id" class="ml-1 text-xs text-slate-400">저장 중…</span>
             </td>
           </tr>
         </tbody>
@@ -168,19 +162,22 @@ tailwind.config = { theme: { extend: {
     </div>
 
     <div class="card p-5 h-fit">
-      <h2 class="text-sm font-semibold text-slate-700 mb-3">트리아지</h2>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-700">트리아지</h2>
+        <span v-if="saving" class="text-xs text-slate-400">저장 중…</span>
+        <span v-else-if="saved" class="text-xs text-emerald-600">저장됨</span>
+      </div>
       <div class="space-y-3">
         <div><div class="lbl">구분</div>
-          <select v-model="form.category" class="inp"><option v-for="c in CATS" :key="c" :value="c">{{ c }}</option></select></div>
+          <select v-model="form.category" @change="saveField" class="inp"><option v-for="c in CATS" :key="c" :value="c">{{ c }}</option></select></div>
         <div><div class="lbl">상태</div>
-          <select v-model="form.status" class="inp"><option v-for="s in STS" :key="s" :value="s">{{ s }}</option></select></div>
+          <select v-model="form.status" @change="saveField" class="inp"><option v-for="s in STS" :key="s" :value="s">{{ s }}</option></select></div>
         <div><div class="lbl">담당자</div>
-          <select v-model="form.assignee_id" class="inp"><option :value="null">미지정</option>
+          <select v-model="form.assignee_id" @change="saveField" class="inp"><option :value="null">미지정</option>
             <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option></select></div>
         <div><div class="lbl">메모</div>
-          <textarea v-model="form.memo" rows="4" class="inp" placeholder="트리아지 메모…"></textarea></div>
-        <button class="btn-primary w-full" :disabled="saving" @click="saveTriage">{{ saving ? '저장 중…' : '저장' }}</button>
-        <div v-if="saved" class="text-xs text-emerald-600">저장됨 · 다음 동기화 때 로컬에도 반영됩니다.</div>
+          <textarea v-model="form.memo" @change="saveField" rows="4" class="inp" placeholder="트리아지 메모… (입력 후 포커스를 벗어나면 자동 저장)"></textarea></div>
+        <div class="text-xs text-slate-400">변경 즉시 저장 · 다음 동기화 때 로컬에도 반영됩니다.</div>
         <div v-if="saveErr" class="text-xs text-red-600">{{ saveErr }}</div>
       </div>
     </div>
@@ -207,7 +204,7 @@ createApp({
     view:'home', loading:true, error:'', route:{},
     projects:[], runs:[], run:{}, personas:[], issues:[], issue:{}, members:[],
     projectsById:{},
-    dirty:{}, savingAll:false, savedMsg:'', savedErr:false, reverting:false,
+    savingId:null, savedMsg:'', savedErr:false,
     memo:{ open:false, target:null, draft:'', saving:false },
     form:{ category:null, status:null, assignee_id:null, memo:'' }, saving:false, saved:false, saveErr:'',
     CATS:['문의','오류','기능개선','제안','성공'], STS:['열림','진행중','완료','보류'],
@@ -216,7 +213,6 @@ createApp({
              {k:'evidence',label:'증거'},{k:'memo',label:'트리아지 메모'} ],
   } },
   computed: {
-    dirtyCount() { return Object.keys(this.dirty).length },
     projectName() { const p = this.projectsById[this.route.id]; return p ? p.name : ('프로젝트 #'+this.route.id) },
     crumbs() {
       const c = []
@@ -248,7 +244,7 @@ createApp({
     },
     async load() {
       this.loading = true; this.error = ''
-      this.dirty = {}; this.savedMsg = ''   // 화면 전환 시 미저장 표시 초기화(데이터도 새로 로드됨)
+      this.savingId = null; this.savedMsg = ''   // 화면 전환 시 저장 표시 초기화(데이터도 새로 로드됨)
       try {
         const r = this.parseRoute(); this.route = r; this.view = r.view
         if (!Object.keys(this.projectsById).length) {
@@ -269,12 +265,14 @@ createApp({
         }
       } catch(e) { this.error = e.message } finally { this.loading = false }
     },
-    async saveTriage() {
+    // 상세 화면 트리아지 — 구분/상태/담당자/메모 변경 즉시 저장
+    async saveField() {
       this.saving=true; this.saved=false; this.saveErr=''
       try {
         const body = { category:this.form.category, status:this.form.status, assignee_id:this.form.assignee_id, memo:this.form.memo }
         const upd = await this.api('/issues/'+this.route.id+'/triage', { method:'PATCH', body:JSON.stringify(body) })
         this.issue = upd; this.saved = true
+        setTimeout(() => { this.saved = false }, 2500)
       } catch(e) { this.saveErr = e.message } finally { this.saving=false }
     },
     // 담당자 후보 = 이 프로젝트에 매칭된 회원
@@ -282,22 +280,15 @@ createApp({
       if (projectId == null) { this.members = []; return }
       try { this.members = (await this.api('/projects/'+projectId+'/members')).members || [] } catch(e) { this.members = [] }
     },
-    // 리스트 인라인 편집(구분/상태/담당자) — 변경 표시만, 저장은 우상단 '저장하기'로 일괄 반영
-    markDirty(it) { this.dirty = Object.assign({}, this.dirty, { [it.id]: true }); this.savedMsg = '' },
-    async saveAll() {
-      const ids = Object.keys(this.dirty)
-      if (!ids.length) return
-      this.savingAll = true; this.savedMsg = ''
+    // 리스트 인라인 편집(구분/상태/담당자) — 변경 즉시 저장
+    async saveCell(it) {
+      this.savingId = it.id; this.savedErr = false; this.savedMsg = ''
       try {
-        for (const idStr of ids) {
-          const it = this.issues.find((x) => String(x.id) === idStr)
-          if (!it) continue
-          await this.api('/issues/'+it.id+'/triage', { method:'PATCH', body: JSON.stringify({ category: it.category, status: it.status, assignee_id: it.assignee_id }) })
-        }
-        this.dirty = {}; this.savedErr = false; this.savedMsg = '✓ '+ids.length+'건 저장됨 · 다음 동기화 때 로컬 반영'
-        setTimeout(() => { this.savedMsg = '' }, 4000)
+        await this.api('/issues/'+it.id+'/triage', { method:'PATCH', body: JSON.stringify({ category: it.category, status: it.status, assignee_id: it.assignee_id }) })
+        this.savedErr = false; this.savedMsg = '✓ 저장됨 · 다음 동기화 때 로컬 반영'
+        setTimeout(() => { this.savedMsg = '' }, 3000)
       } catch(e) { this.savedErr = true; this.savedMsg = '저장 실패: ' + e.message }
-      finally { this.savingAll = false }
+      finally { this.savingId = null }
     },
     openMemo(it) { this.memo = { open:true, target:it, draft: it.memo||'', saving:false } },
     closeMemo() { if (this.memo.saving) return; this.memo = { open:false, target:null, draft:'', saving:false } },
@@ -312,17 +303,8 @@ createApp({
     },
   },
   mounted() {
-    window.addEventListener('hashchange', () => {
-      if (this.reverting) { this.reverting = false; return } // 프로그램적 원복 → 재확인 방지
-      if (this.dirtyCount && !confirm('저장하지 않은 변경 '+this.dirtyCount+'건이 있습니다. 저장하지 않고 이동할까요?')) {
-        // 이동 취소: 현재 경로로 해시 원복(아래 hashchange 1회는 reverting 플래그로 무시)
-        const back = this.view==='run' ? '#/runs/'+this.route.id : (this.view==='project' ? '#/projects/'+this.route.id : (this.view==='issue' ? '#/issues/'+this.route.id : '#/'))
-        if (location.hash !== back) { this.reverting = true; location.hash = back }
-        return
-      }
-      this.load()
-    })
-    window.addEventListener('beforeunload', (e) => { if (this.dirtyCount) { e.preventDefault(); e.returnValue = '' } })
+    // 모든 편집이 즉시 저장되므로 미저장 이탈 가드는 불필요 — 해시 변경 시 바로 로드
+    window.addEventListener('hashchange', () => this.load())
     this.load()
   },
 }).mount('#app')
