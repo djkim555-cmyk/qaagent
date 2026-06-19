@@ -31,6 +31,9 @@ export default {
       savedTag: '',
       sending: false,
       aiSaving: false,
+      // 비밀번호 감지 보류 상태: 안내 후 같은 입력을 다시 보내면 마스킹 전송
+      secretPending: false,
+      secretPendingText: '',
     }
   },
   async mounted() {
@@ -129,6 +132,8 @@ export default {
       this.currentMd = ''
       this.sname = ''
       this.draft = ''
+      this.secretPending = false
+      this.secretPendingText = ''
       this.refreshIcons()
       if (path) {
         try {
@@ -141,13 +146,61 @@ export default {
         } catch (err) { this.bubbles.push({ cls: 'assistant', text: '불러오기 실패: ' + err.message }) }
       }
     },
-    closeAi() { if (this.sending || this.aiSaving) return; this.showAi = false },
+    closeAi() { if (this.sending || this.aiSaving) return; this.showAi = false; this.secretPending = false; this.secretPendingText = '' },
     scrollChat() { this.$nextTick(() => { const el = this.$refs.chat; if (el) el.scrollTop = el.scrollHeight }) },
     onKey(e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.send() } },
+    // 비밀번호 감지: 라벨(password/비번 등) + 필수 구분자(:/=/：) + 자격증명 토큰 형태만 매칭(보수적).
+    // 토큰은 공백/$/*/중괄호로 시작하지 않으므로 치환자 ${ENV:...}·마스킹(***)·라벨만 등장은 매칭되지 않는다(과탐 방지).
+    // 구분자 없이 단어만 등장하는 경우(예: "password 정책")도 매칭하지 않는다. 원문 비번은 반환·로깅하지 않는다.
+    secretRegex() {
+      return /(?:password|passwd|pwd|pw|비밀번호|비번|암호)\s*[:=：]\s*([^\s$*{][^\s]*)/gi
+    },
+    detectSecret(text) {
+      if (!text) return false
+      return this.secretRegex().test(text)
+    },
+    // 감지된 비번 토큰을 치환자로 가린 텍스트 반환(원문 비번은 결과에 남기지 않음)
+    maskSecret(text) {
+      return text.replace(this.secretRegex(), (full, token) => full.slice(0, full.length - token.length) + '${ENV:QA_TEST_PASSWORD}')
+    },
     async send() {
       const text = this.draft.trim()
       if (!text || this.sending) return
+      // draft 가 바뀌면 보류 플래그 리셋(다른 입력에 보류 상태를 잘못 적용하지 않도록)
+      if (this.secretPending && text !== this.secretPendingText) this.secretPending = false
+      // 1차: 비번 감지 시 전송 보류 + 안내. 2차(같은 입력 재전송): 마스킹해서 전송.
+      if (this.detectSecret(text)) {
+        if (!this.secretPending) {
+          this.secretPending = true
+          this.secretPendingText = text
+          this.bubbles.push({ cls: 'assistant', text: '비밀번호는 시나리오에 저장하지 않습니다. 계정 ID·로그인 경로만 적어 주시고, 비밀번호는 .env의 QA_TEST_PASSWORD(또는 config/target.json의 ${ENV:QA_TEST_PASSWORD})로 주입하세요.\n그래도 보내려면 다시 [보내기]를 누르면 비밀번호 부분은 가려서 전송합니다.' })
+          this.scrollChat()
+          return
+        }
+        // 2차 — 마스킹 후 진행
+        this.draft = ''; this.sending = true
+        this.secretPending = false; this.secretPendingText = ''
+        const masked = this.maskSecret(text)
+        this.bubbles.push({ cls: 'user', text: masked })
+        this.messages.push({ role: 'user', content: masked })
+        this.bubbles.push({ cls: 'assistant thinking', text: '생각 중…' })
+        this.scrollChat()
+        try {
+          const out = await this.$api.post('/api/scenarios/chat', { messages: this.messages, serviceContext: this.serviceContext })
+          this.bubbles.pop()
+          this.bubbles.push({ cls: 'assistant', text: out.reply })
+          this.messages.push({ role: 'assistant', content: out.reply })
+          if (out.markdown) this.currentMd = out.markdown
+        } catch (e) {
+          this.bubbles.pop()
+          this.bubbles.push({ cls: 'assistant', text: '오류: ' + e.message + ' (인증 확인 — claude login 또는 ANTHROPIC_API_KEY)' })
+        }
+        this.sending = false
+        this.scrollChat()
+        return
+      }
       this.draft = ''; this.sending = true
+      this.secretPending = false; this.secretPendingText = ''
       this.bubbles.push({ cls: 'user', text })
       this.messages.push({ role: 'user', content: text })
       this.bubbles.push({ cls: 'assistant thinking', text: '생각 중…' })

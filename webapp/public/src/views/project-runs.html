@@ -173,11 +173,15 @@
       </div>
       <div class="flex flex-col overflow-hidden">
         <div class="card-h">AI와 대화</div>
+        <div class="flex items-center gap-1 text-xs text-slate-500 mb-2">
+          <i data-lucide="shield-check" class="size-3.5 text-slate-400"></i>
+          비밀번호는 입력하지 마세요. .env의 QA_TEST_PASSWORD로 주입됩니다.
+        </div>
         <div class="flex-1 overflow-auto flex flex-col gap-2.5 px-0.5 py-1" ref="chat">
           <div v-for="(b, i) in bubbles" :key="i" class="msg" :class="b.cls">{{ b.text }}</div>
         </div>
         <div class="flex gap-2 items-end mt-2.5 border-t border-slate-200 pt-2.5">
-          <textarea class="textarea resize-none" rows="2" v-model="draft" @keydown="onKey" placeholder="예: 쿠폰 적용·결제·취소가 핵심인 쇼핑몰. 모바일/접근성 중점으로. (Ctrl+Enter 전송)"></textarea>
+          <textarea class="textarea resize-none" rows="2" v-model="draft" @keydown="onKey" placeholder="예: 쿠폰 적용·결제·취소가 핵심인 쇼핑몰. 계정 ID·로그인 경로만 입력(비밀번호는 env 주입). 모바일/접근성 중점으로. (Ctrl+Enter 전송)"></textarea>
           <button class="btn btn-primary" @click="send" :disabled="sending"><i data-lucide="send"></i> 보내기</button>
         </div>
       </div>
