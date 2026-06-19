@@ -8,7 +8,7 @@ import * as live from './runStore.js'
 import * as repo from './repo.js'
 import { startRun } from './orchestrator.js'
 import { authenticate, isReservedLoginId, hashPassword, issueCookie, clearAuthCookie, requireApi, requireSuper, SUPER_ID, type Identity } from './auth.js'
-import { generatePersonas, chatPersona, chatScenario, saveScenarioFile, readScenarioFile } from './llm.js'
+import { generatePersonas, chatPersona, chatScenario, saveScenarioFile, readScenarioFile, exploreLoggedInScreens } from './llm.js'
 import * as pool from './personaPool.js'
 import * as sync from './sync.js'
 
@@ -19,10 +19,31 @@ app.use(express.urlencoded({ extended: false }))
 // 정적 SPA (Vue 3 + ViewLogic Router) — index.html, css/, src/views·logic·layouts
 app.use(express.static(PUBLIC_DIR, { index: false }))
 
+// config/target.json 이 로그인 탐색(옵션 C) 가능한 상태인지 — auth.required && 자격증명 env 존재.
+// (프론트가 '로그인 후 화면 탐색' 체크박스 활성화 판단에 사용)
+const hasTargetAuth = (): boolean => {
+  try {
+    const abs = path.join(PROJECT_ROOT, 'config', 'target.json')
+    if (!fs.existsSync(abs)) return false
+    const cfg = JSON.parse(fs.readFileSync(abs, 'utf8'))
+    if (cfg?.auth?.required !== true) return false
+    // steps 가 참조하는 ${ENV:NAME} 들이 모두 존재해야 한다(없으면 QA_TEST_PASSWORD 기본).
+    const re = /\$\{ENV:([A-Z0-9_]+)\}/gi
+    const names = new Set<string>()
+    for (const st of Array.isArray(cfg.auth.steps) ? cfg.auth.steps : []) {
+      const v = typeof st?.value === 'string' ? st.value : ''
+      let m: RegExpExecArray | null
+      while ((m = re.exec(v))) names.add(m[1])
+    }
+    const required = names.size ? [...names] : ['QA_TEST_PASSWORD']
+    return required.every((nm) => !!process.env[nm])
+  } catch { return false }
+}
+
 const envInfo = () => {
   const auth = authStatus()
   // hasApiKey 는 구버전 UI 호환용 별칭(인증 가능 여부). authMode 로 키/세션 구분.
-  return { hasAuth: auth.ok, authMode: auth.mode, hasApiKey: auth.ok, concurrency: CONCURRENCY, model: MODEL, playwright: ENABLE_PLAYWRIGHT }
+  return { hasAuth: auth.ok, authMode: auth.mode, hasApiKey: auth.ok, concurrency: CONCURRENCY, model: MODEL, playwright: ENABLE_PLAYWRIGHT, hasTargetAuth: hasTargetAuth() }
 }
 const listScenarioFiles = () =>
   fs.readdirSync(path.join(PROJECT_ROOT, 'scenarios')).filter((f) => f.endsWith('.md') && !f.startsWith('_')).map((f) => `scenarios/${f}`)
@@ -551,12 +572,36 @@ app.delete('/api/projects/:id/personas/:rowId', (req, res) => {
   res.json({ ok: true })
 })
 
-// 대화형 시나리오 작성
+// 대화형 시나리오 작성 — 옵션 C: exploreLoggedIn=true 면 로그인 후 화면을 탐색해 구조를 주입.
 app.post('/api/scenarios/chat', async (req, res) => {
   try {
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : []
-    const out = await chatScenario(messages, req.body?.serviceContext)
-    res.json(out)
+    const exploreLoggedIn = req.body?.exploreLoggedIn === true
+    const projectId = req.body?.projectId ? Number(req.body.projectId) : null
+
+    let loginScreens: string | undefined
+    let exploreNote: string | undefined
+    if (exploreLoggedIn) {
+      // projectId 로 base_url 을 얻을 수 있을 때만 탐색(없으면 건너뜀). 탐색 함수는 어떤 실패도 throw 하지 않음.
+      const p = projectId ? repo.getProject(projectId) : null
+      // [상-1] IDOR 차단: 프로젝트가 존재하면 base_url 을 쓰기 전에 접근 권한을 검증한다.
+      //   (프로젝트가 없으면(null) 탐색만 건너뛰고 채팅은 그대로 진행 — 403 아님. /api/runs 등과 동일 패턴.)
+      if (projectId && p && !canSeeProject(ident(req), p)) {
+        return fail(res, 403, '이 프로젝트에 접근할 권한이 없습니다.')
+      }
+      const baseUrl = p?.base_url ? String(p.base_url) : ''
+      if (baseUrl) {
+        const ex = await exploreLoggedInScreens(baseUrl)
+        loginScreens = ex.summary ?? undefined   // summary 원문은 chatScenario 프롬프트로만 전달
+        exploreNote = ex.note                     // 응답에는 상태 문구만
+      } else {
+        exploreNote = '대상 URL을 찾지 못해 탐색을 건너뜀 — 로그인 전 정보로 작성'
+      }
+    }
+
+    const out = await chatScenario(messages, req.body?.serviceContext, loginScreens)
+    // 보안: summary 원문은 응답에 넣지 않는다. reply/markdown + 상태성 exploreNote 만.
+    res.json({ ...out, exploreNote })
   } catch (e: any) { fail(res, 500, e?.message || '대화 실패') }
 })
 app.post('/api/scenarios/save', (req, res) => {

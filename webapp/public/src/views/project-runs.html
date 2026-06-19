@@ -177,6 +177,14 @@
           <i data-lucide="shield-check" class="size-3.5 text-slate-400"></i>
           비밀번호는 입력하지 마세요. .env의 QA_TEST_PASSWORD로 주입됩니다.
         </div>
+        <div class="mb-2">
+          <label class="flex items-start gap-2 text-xs text-slate-700" :class="{ 'opacity-50 cursor-not-allowed': !env.hasTargetAuth, 'cursor-pointer': env.hasTargetAuth }">
+            <input type="checkbox" v-model="exploreLoggedIn" :disabled="!env.hasTargetAuth" class="size-4 mt-px rounded border-slate-300 text-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed" />
+            <span>로그인 후 화면도 탐색해서 더 자세히 <span class="text-slate-500">(대상 서비스에 실제 로그인)</span></span>
+          </label>
+          <p v-if="!env.hasTargetAuth" class="text-xs text-slate-500 mt-1 pl-6">대상 서비스 로그인 설정(config/target.json)과 QA_TEST_PASSWORD가 설정되면 사용할 수 있습니다.</p>
+          <p v-else class="text-xs text-slate-500 mt-1 pl-6">체크 시 로그인 후 화면 구조를 근거로 더 구체적인 시나리오를 만듭니다.</p>
+        </div>
         <div class="flex-1 overflow-auto flex flex-col gap-2.5 px-0.5 py-1" ref="chat">
           <div v-for="(b, i) in bubbles" :key="i" class="msg" :class="b.cls">{{ b.text }}</div>
         </div>

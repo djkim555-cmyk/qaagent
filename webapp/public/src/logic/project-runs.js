@@ -31,6 +31,7 @@ export default {
       savedTag: '',
       sending: false,
       aiSaving: false,
+      exploreLoggedIn: false,
       // 비밀번호 감지 보류 상태: 안내 후 같은 입력을 다시 보내면 마스킹 전송
       secretPending: false,
       secretPendingText: '',
@@ -134,6 +135,7 @@ export default {
       this.draft = ''
       this.secretPending = false
       this.secretPendingText = ''
+      this.exploreLoggedIn = false
       this.refreshIcons()
       if (path) {
         try {
@@ -186,9 +188,10 @@ export default {
         this.bubbles.push({ cls: 'assistant thinking', text: '생각 중…' })
         this.scrollChat()
         try {
-          const out = await this.$api.post('/api/scenarios/chat', { messages: this.messages, serviceContext: this.serviceContext })
+          const out = await this.$api.post('/api/scenarios/chat', { messages: this.messages, serviceContext: this.serviceContext, exploreLoggedIn: this.exploreLoggedIn, projectId: Number(this.id) })
           this.bubbles.pop()
           this.bubbles.push({ cls: 'assistant', text: out.reply })
+          if (out.exploreNote) this.bubbles.push({ cls: 'assistant', text: '🔎 ' + out.exploreNote })
           this.messages.push({ role: 'assistant', content: out.reply })
           if (out.markdown) this.currentMd = out.markdown
         } catch (e) {
@@ -206,9 +209,10 @@ export default {
       this.bubbles.push({ cls: 'assistant thinking', text: '생각 중…' })
       this.scrollChat()
       try {
-        const out = await this.$api.post('/api/scenarios/chat', { messages: this.messages, serviceContext: this.serviceContext })
+        const out = await this.$api.post('/api/scenarios/chat', { messages: this.messages, serviceContext: this.serviceContext, exploreLoggedIn: this.exploreLoggedIn, projectId: Number(this.id) })
         this.bubbles.pop()
         this.bubbles.push({ cls: 'assistant', text: out.reply })
+        if (out.exploreNote) this.bubbles.push({ cls: 'assistant', text: '🔎 ' + out.exploreNote })
         this.messages.push({ role: 'assistant', content: out.reply })
         if (out.markdown) this.currentMd = out.markdown
       } catch (e) {

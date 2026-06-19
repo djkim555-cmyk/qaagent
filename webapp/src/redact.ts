@@ -155,3 +155,49 @@ export function redactSecrets(text: string): { redacted: string; hits: number } 
 
   return { redacted, hits }
 }
+
+// ── 화면 요약 전용 보강 redact (옵션 C exploreLoggedInScreens 산출물용) ──────
+//
+// 목적: redactSecrets 는 "라벨이 붙은" 자격증명을 잡는다. 하지만 로그인 후 화면 요약에는
+//       라벨 없이 떨어진 고엔트로피 토큰(세션 JWT, AWS 키, 긴 base64/hex 비밀)이 섞일 수 있다.
+//       이 함수는 redactSecrets 결과 위에 "라벨 무관" 고엔트로피 마스킹 + (가능하면) 실제
+//       자격증명 값 정확일치 마스킹을 추가한다.
+//
+// 주의:
+//   - 이 함수는 화면 요약 전용이다. 시나리오 본문 일반 redact(chatScenario reply/markdown,
+//     saveScenarioFile)에는 적용하지 않는다(고엔트로피 24+ 규칙이 정상 식별자를 과탐할 수 있음).
+//   - 멱등성: 치환자(${ENV:...})·마스킹(***)은 다시 건드리지 않게 가드한다.
+//   - 원본 자격증명 값은 어떤 형태로도 반환/로그하지 않는다(치환만 한다).
+const SCREEN_SECRET = '${ENV:SECRET}'
+
+// 이미 안전한 치환자/마스킹 토큰(중첩 치환 방지용 가드).
+//   ${ENV:...} 와 *** 자체가 고엔트로피 규칙에 다시 걸리지 않도록 건너뛴다.
+function isAlreadyMasked(token: string): boolean {
+  return /\$\{ENV:[^}]*\}/.test(token) || /\*{3,}/.test(token)
+}
+
+export function redactScreenSummary(text: string, envValues?: string[]): string {
+  if (!text) return text ?? ''
+  // 1) 라벨 기반 기존 redact 선적용.
+  let out = redactSecrets(text).redacted
+
+  // 2) 라벨 무관 고엔트로피 마스킹.
+  // 2-a) JWT (header.payload[.signature]) — eyJ 로 시작하는 점 구분 토큰.
+  out = out.replace(/eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}(?:\.[A-Za-z0-9_-]+)?/g, (m) =>
+    isAlreadyMasked(m) ? m : SCREEN_SECRET,
+  )
+  // 2-b) AWS 액세스키 ID.
+  out = out.replace(/AKIA[0-9A-Z]{16}/g, (m) => (isAlreadyMasked(m) ? m : SCREEN_SECRET))
+  // 2-c) 길이 24+ 연속 base64/hex/토큰 문자열(단어경계). 이미 마스킹/치환자면 건너뜀.
+  out = out.replace(/\b[A-Za-z0-9+/=_-]{24,}\b/g, (m) => (isAlreadyMasked(m) ? m : SCREEN_SECRET))
+
+  // 3) 실제 자격증명 값 정확일치 마스킹(주어졌을 때만). split/join 정확일치 — 정규식 메타 안전.
+  if (Array.isArray(envValues)) {
+    for (const raw of envValues) {
+      const v = typeof raw === 'string' ? raw : ''
+      if (!v || v.length < 4) continue // 과탐 방지: 빈값/짧은 값 건너뜀.
+      if (out.includes(v)) out = out.split(v).join(SCREEN_SECRET)
+    }
+  }
+  return out
+}
