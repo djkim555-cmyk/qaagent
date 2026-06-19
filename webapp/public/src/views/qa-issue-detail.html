@@ -68,21 +68,55 @@
     </div></div>
   </div>
 
-  <!-- 우: 이슈 정보(메타) -->
-  <div class="card"><div class="card-body">
-    <div class="card-h">이슈 정보</div>
-    <div class="overflow-x-auto -mx-5">
-      <table class="tbl"><tbody>
-        <tr><td class="muted">유형</td><td>{{ issue.type || '-' }}</td></tr>
-        <tr><td class="muted">구분</td><td><span class="dot" :class="'dot-' + (issue.category || '미분류')"></span>{{ issue.category || '미분류' }}</td></tr>
-        <tr><td class="muted">상태</td><td><span :class="'st-' + (issue.status || '열림')">{{ issue.status || '열림' }}</span></td></tr>
-        <tr><td class="muted">담당자</td><td>{{ issue.assignee_name || '미배정' }}</td></tr>
-        <tr><td class="muted">신뢰</td><td>{{ issue.confidence || '-' }}</td></tr>
-        <tr><td class="muted">시나리오</td><td class="small">{{ (issue.scenario || '').replace('scenarios/', '') }}</td></tr>
-        <tr><td class="muted">태스크</td><td class="small">{{ issue.task || '-' }}</td></tr>
-        <tr><td class="muted">페르소나</td><td class="small">{{ issue.persona_id }}<span v-if="issue.persona_name"> · {{ issue.persona_name }}</span><span v-if="issue.age_band" class="muted"> ({{ issue.age_band }}/친숙도 {{ issue.digital_literacy }})</span></td></tr>
-        <tr><td class="muted">실행</td><td><a class="text-primary-700 hover:underline cursor-pointer mono small" @click="openRun">{{ issue.run_id }}</a></td></tr>
-      </tbody></table>
-    </div>
-  </div></div>
+  <!-- 우: 트리아지(편집) + 이슈 정보(메타) -->
+  <div class="space-y-3">
+    <div class="card"><div class="card-body">
+      <div class="flex items-center justify-between">
+        <div class="card-h m-0">트리아지</div>
+        <span v-if="saving" class="small muted">저장 중…</span>
+        <span v-else-if="saved" class="small text-mint">✓ 저장됨</span>
+        <span v-else-if="saveErr" class="small text-red-600">저장 실패</span>
+      </div>
+      <div class="space-y-3 mt-3">
+        <div>
+          <div class="muted small mb-1">구분</div>
+          <select class="select w-full" v-model="issue.category" @change="saveField">
+            <option value="">미분류</option>
+            <option v-for="c in categories" :key="c">{{ c }}</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted small mb-1">상태</div>
+          <select class="select w-full" :class="'st-' + (issue.status || '열림')" v-model="issue.status" @change="saveField">
+            <option v-for="s in statuses" :key="s">{{ s }}</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted small mb-1">담당자</div>
+          <select class="select w-full" v-model="issue.assignee_id" @change="saveField">
+            <option :value="null">미배정</option>
+            <option v-for="d in developers" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted small mb-1">메모</div>
+          <textarea class="textarea w-full" rows="5" v-model="issue.memo" @change="saveField" placeholder="이 이슈에 대한 메모 (재현 조건, 논의 내용, 처리 메모 등) — 입력 후 포커스를 벗어나면 자동 저장"></textarea>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+      <div class="card-h">이슈 정보</div>
+      <div class="overflow-x-auto -mx-5">
+        <table class="tbl"><tbody>
+          <tr><td class="muted">유형</td><td>{{ issue.type || '-' }}</td></tr>
+          <tr><td class="muted">신뢰</td><td>{{ issue.confidence || '-' }}</td></tr>
+          <tr><td class="muted">시나리오</td><td class="small">{{ (issue.scenario || '').replace('scenarios/', '') }}</td></tr>
+          <tr><td class="muted">태스크</td><td class="small">{{ issue.task || '-' }}</td></tr>
+          <tr><td class="muted">페르소나</td><td class="small">{{ issue.persona_id }}<span v-if="issue.persona_name"> · {{ issue.persona_name }}</span><span v-if="issue.age_band" class="muted"> ({{ issue.age_band }}/친숙도 {{ issue.digital_literacy }})</span></td></tr>
+          <tr><td class="muted">실행</td><td><a class="text-primary-700 hover:underline cursor-pointer mono small" @click="openRun">{{ issue.run_id }}</a></td></tr>
+        </tbody></table>
+      </div>
+    </div></div>
+  </div>
 </div>

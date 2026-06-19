@@ -6,6 +6,13 @@ export default {
       project: { name: '' },
       issue: {},
       shots: [],
+      // 트리아지 편집(상세) — 변경 즉시 저장
+      developers: [],
+      categories: [],
+      statuses: [],
+      saving: false,
+      saved: false,
+      saveErr: '',
       loaded: false,
     }
   },
@@ -16,6 +23,9 @@ export default {
       const r = await this.$api.get('/api/issues/' + this.issueId)
       this.issue = r.issue || {}
       this.shots = r.shots || []
+      this.developers = r.developers || []
+      this.categories = r.categories || []
+      this.statuses = r.statuses || []
     } catch (e) { /* noop */ }
     try {
       const p = await this.$api.get('/api/projects/' + this.id)
@@ -38,5 +48,19 @@ export default {
   },
   methods: {
     openRun() { if (this.issue.run_id) this.navigateTo('run-detail', { id: this.id, runId: this.issue.run_id }) },
-  },
+    // 구분/상태/담당자/메모 변경 즉시 저장 (리스트 화면과 동일한 PATCH)
+    async saveField() {
+      this.saving = true; this.saved = false; this.saveErr = ''
+      try {
+        await this.$api.patch('/api/issues/' + this.issueId, {
+          category: this.issue.category,
+          assigneeId: this.issue.assignee_id,
+          status: this.issue.status,
+          memo: this.issue.memo,
+        })
+        this.saved = true
+        setTimeout(() => { this.saved = false }, 2500)
+      } catch (e) { this.saveErr = e.message }
+      this.saving = false
+    },
 }

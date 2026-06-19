@@ -17,9 +17,6 @@
   </div>
   <div class="flex items-center gap-2">
     <span v-if="savedMsg" class="small" :class="savedErr ? 'text-red-600' : 'text-mint'">{{ savedMsg }}</span>
-    <button class="btn btn-primary" @click="save" :disabled="saving">
-      <i data-lucide="save"></i> 저장하기<span v-if="dirtyCount"> ({{ dirtyCount }})</span>
-    </button>
   </div>
 </div>
 
@@ -84,19 +81,19 @@
             <td class="small muted">{{ i.type || '' }}</td>
             <td class="small muted">{{ personaLabel(i) }}</td>
             <td>
-              <select class="select" v-model="i.category" @change="markDirty(i)">
+              <select class="select" v-model="i.category" @change="saveCell(i)">
                 <option value="">미분류</option>
                 <option v-for="c in categories" :key="c">{{ c }}</option>
               </select>
             </td>
             <td>
-              <select class="select" v-model="i.assignee_id" @change="markDirty(i)">
+              <select class="select" v-model="i.assignee_id" @change="saveCell(i)">
                 <option :value="null">미배정</option>
                 <option v-for="d in developers" :key="d.id" :value="d.id">{{ d.name }}</option>
               </select>
             </td>
             <td>
-              <select class="select" :class="'st-' + (i.status || '열림')" v-model="i.status" @change="markDirty(i)">
+              <select class="select" :class="'st-' + (i.status || '열림')" v-model="i.status" @change="saveCell(i)">
                 <option v-for="s in statuses" :key="s">{{ s }}</option>
               </select>
             </td>
@@ -110,7 +107,7 @@
         </tbody>
       </table>
     </div>
-    <div class="small muted mt-2">구분·담당자·상태를 바꾼 뒤 <b>저장하기</b>로 DB에 저장합니다. 컬럼 머리의 <i data-lucide="list-filter" class="size-3 inline"></i> 로 값을 복수 선택해 필터링할 수 있습니다. 제목 클릭 시 상세(현상·오류 화면 캡쳐)를 봅니다. 통과한 태스크는 <b>성공</b>으로 함께 표시되고, 한 페르소나가 같은 오류를 여러 번 겪으면 <b>외 N건</b>으로 묶여 보입니다.</div>
+    <div class="small muted mt-2">구분·담당자·상태를 바꾸면 <b>즉시 저장</b>됩니다. 컬럼 머리의 <i data-lucide="list-filter" class="size-3 inline"></i> 로 값을 복수 선택해 필터링할 수 있습니다. 제목 클릭 시 상세(현상·오류 화면 캡쳐·트리아지 편집)를 봅니다. 통과한 태스크는 <b>성공</b>으로 함께 표시되고, 한 페르소나가 같은 오류를 여러 번 겪으면 <b>외 N건</b>으로 묶여 보입니다.</div>
   </template>
 </div></div>
 
