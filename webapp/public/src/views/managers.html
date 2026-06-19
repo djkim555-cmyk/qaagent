@@ -42,13 +42,13 @@
 
 <!-- ===== 프로젝트 매칭 ===== -->
 <div v-show="tab === 'matching'" class="card"><div class="card-body">
-  <div class="card-h">프로젝트별 회원 매칭 ({{ projects.length }})</div>
-  <div v-if="loaded && !projects.length" class="empty">등록된 프로젝트가 없습니다.</div>
-  <div v-else-if="projects.length" class="overflow-x-auto -mx-5">
+  <div class="card-h">프로젝트별 회원 매칭 ({{ visibleProjects.length }})</div>
+  <div v-if="loaded && !visibleProjects.length" class="empty">등록된 프로젝트가 없습니다.</div>
+  <div v-else-if="visibleProjects.length" class="overflow-x-auto -mx-5">
     <table class="tbl">
       <thead><tr><th>프로젝트</th><th>대상 URL</th><th></th></tr></thead>
       <tbody>
-        <tr v-for="p in projects" :key="p.id">
+        <tr v-for="p in visibleProjects" :key="p.id">
           <td class="font-medium text-slate-900">{{ p.name }}</td>
           <td class="small muted truncate max-w-[280px]">{{ p.base_url }}</td>
           <td class="text-right">

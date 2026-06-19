@@ -28,6 +28,8 @@ export default {
   },
   async mounted() { await this.load() },
   computed: {
+    // 프로젝트 화면에서 숨긴 프로젝트는 매칭 목록에서도 노출하지 않는다.
+    visibleProjects() { return this.projects.filter((p) => !p.hidden) },
     approvedMembers() { return this.members.filter((m) => m.status === 'approved') },
     pendingCount() { return this.members.filter((m) => m.status === 'pending').length },
     // id → 회원 객체
