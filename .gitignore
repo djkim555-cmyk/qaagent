@@ -10,6 +10,9 @@ node_modules/
 *.log
 .playwright-mcp/
 
+# 배포/전달용 산출물(zip 등) — 저장소에 바이너리 커밋 금지
+output/
+
 # OS
 .DS_Store
 Thumbs.db

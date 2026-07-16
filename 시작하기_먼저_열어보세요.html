@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QA 에이전트팀 — 시작하기</title>
+<style>
+  :root{ --ink:#1e293b; --mut:#64748b; --line:#e2e8f0; --blue:#2b7fff; --bg:#f8fafc;
+         --ok:#059669; --warn:#b45309; --card:#fff; }
+  @media (prefers-color-scheme: dark){
+    :root{ --ink:#e5e7eb; --mut:#94a3b8; --line:#334155; --bg:#0f172a; --card:#1e293b; }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink);
+        font-family:'Pretendard','Malgun Gothic',-apple-system,'Segoe UI',Roboto,sans-serif;
+        line-height:1.7; letter-spacing:-.01em; }
+  .wrap{ max-width:760px; margin:0 auto; padding:32px 20px 64px; }
+  header{ text-align:center; margin-bottom:28px; }
+  header h1{ font-size:26px; margin:0 0 6px; letter-spacing:-.02em; }
+  header p{ color:var(--mut); margin:0; }
+  .lead{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:24px; }
+  .lead b{ color:var(--blue); }
+  .step{ background:var(--card); border:1px solid var(--line); border-radius:12px;
+         padding:20px 22px; margin:0 0 16px; position:relative; }
+  .step h2{ font-size:18px; margin:0 0 8px; display:flex; align-items:center; gap:10px; }
+  .num{ flex:none; width:30px; height:30px; border-radius:50%; background:var(--blue); color:#fff;
+        font-size:15px; font-weight:700; display:grid; place-items:center; }
+  .step p{ margin:6px 0; }
+  .step small{ color:var(--mut); }
+  code,kbd{ background:rgba(127,127,127,.15); border-radius:5px; padding:1px 6px;
+            font-family:'Cascadia Code',Consolas,monospace; font-size:.92em; }
+  a{ color:var(--blue); }
+  .btn{ display:inline-block; background:var(--blue); color:#fff!important; text-decoration:none;
+        padding:8px 16px; border-radius:8px; font-weight:600; margin-top:6px; }
+  .note{ border-left:4px solid var(--blue); background:rgba(43,127,255,.07);
+         padding:10px 14px; border-radius:0 8px 8px 0; margin:10px 0; }
+  .warn{ border-left-color:var(--warn); background:rgba(180,83,9,.09); }
+  .ok{ border-left-color:var(--ok); background:rgba(5,150,105,.09); }
+  ul{ margin:6px 0; padding-left:20px; }
+  li{ margin:3px 0; }
+  hr{ border:0; border-top:1px solid var(--line); margin:28px 0; }
+  h3{ font-size:15px; margin:22px 0 8px; }
+  .foot{ color:var(--mut); font-size:13px; text-align:center; margin-top:32px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>QA 에이전트팀 · 시작하기</h1>
+    <p>전문 지식 없이도 이 순서대로만 하면 됩니다. 5~10분이면 끝나요.</p>
+  </header>
+
+  <div class="lead">
+    이 프로그램은 <b>내 컴퓨터에서 도는 QA 도구</b>입니다. 딱 <b>3가지</b>만 준비하면 시작합니다 —
+    ① 프로그램 실행기(Node.js) 설치 ② 시작 버튼 더블클릭 ③ Claude 로그인.
+    <br />나머지(비밀번호·설치 등)는 <b>자동으로</b> 처리됩니다.
+  </div>
+
+  <div class="step">
+    <h2><span class="num">1</span> Node.js 설치하기 (최초 1회)</h2>
+    <p>이 프로그램을 돌리는 엔진입니다. 아래 버튼을 눌러 <b>LTS 버전</b>을 받아 설치하세요.
+       설치 중 선택지는 모두 <b>기본값(다음)</b>으로 넘어가면 됩니다.</p>
+    <a class="btn" href="https://nodejs.org/ko/download" target="_blank">Node.js 내려받기 →</a>
+    <p><small>이미 설치돼 있다면 이 단계는 건너뛰어도 됩니다. (버전 24 이상 권장)</small></p>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">2</span> 시작 버튼 더블클릭</h2>
+    <p><code>webapp</code> 폴더 안의 <b>QA서버-시작.bat</b> 파일을 <b>더블클릭</b>하세요.
+       검은 창이 뜨면서 자동으로 설치가 진행됩니다.</p>
+    <div class="note">
+      처음 실행하면 두 가지를 물어봅니다:
+      <ul>
+        <li><b>관리자 비밀번호</b> — 나중에 로그인할 때 쓸 비밀번호를 정하세요. (그냥 엔터를 치면 자동으로 만들어 화면에 보여줍니다 → <b>꼭 적어두세요</b>)</li>
+        <li><b>API 키</b> — 있으면 붙여넣고, 없으면 그냥 <b>엔터</b>. (3단계에서 대신 로그인합니다)</li>
+      </ul>
+    </div>
+    <p><small>이후에는 같은 파일을 더블클릭할 때마다 바로 서버가 켜지고 브라우저가 열립니다.</small></p>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">3</span> Claude 인증 (새 QA를 '실행'하려면 필요)</h2>
+    <p>QA 에이전트가 실제로 테스트를 돌리려면 Claude 사용 권한이 필요합니다. <b>둘 중 하나</b>만 하세요:</p>
+    <ul>
+      <li><b>쉬운 방법</b> — 이 PC에 Claude Code가 있으면 명령창에 <code>claude login</code> 한 번. (구독 계정으로 로그인, 키 불필요)</li>
+      <li><b>또는</b> — <a href="https://platform.claude.com" target="_blank">platform.claude.com</a>에서 API 키(<code>sk-ant-...</code>)를 발급받아 2단계에서 붙여넣기.</li>
+    </ul>
+    <div class="note ok">
+      <b>결과를 '보기만' 할 거라면</b> 이 단계는 건너뛰어도 됩니다. 로그인·프로젝트 조회·상태/메모 편집은 인증 없이도 됩니다.
+    </div>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">4</span> 브라우저에서 접속·로그인</h2>
+    <p>잠시 뒤 브라우저가 <code>http://localhost:5510</code> 으로 자동으로 열립니다. (안 열리면 직접 주소창에 입력)</p>
+    <p>로그인:</p>
+    <ul>
+      <li>아이디: <b>admin</b></li>
+      <li>비밀번호: <b>2단계에서 정한(또는 자동 생성된) 관리자 비밀번호</b></li>
+    </ul>
+    <div class="note ok"><b>끝!</b> 이제 프로젝트를 등록하고 “시나리오·실행” 탭에서 QA를 돌릴 수 있습니다.</div>
+  </div>
+
+  <hr />
+
+  <h3>잘 안 될 때</h3>
+  <div class="note warn">
+    <ul>
+      <li><b>검은 창이 “Node.js 없음”이라고 함</b> → 1단계 설치 후 다시 더블클릭.</li>
+      <li><b>서버가 바로 꺼짐 / <code>[auth]</code> 오류</b> → 드문 경우입니다. <code>webapp\.env</code> 파일을 지우고 2단계부터 다시 하세요(설정이 새로 만들어집니다).</li>
+      <li><b>“QA 실행 실패”</b> → 3단계 인증(로그인 또는 API 키)이 안 된 것입니다.</li>
+      <li><b>주소가 안 열림</b> → 검은 창이 켜져 있는 상태에서 <code>http://localhost:5510</code> 을 직접 입력.</li>
+    </ul>
+  </div>
+
+  <h3>더 자세한 설명 (선택)</h3>
+  <p>수동 설치, 다른 운영체제(macOS·Linux), 상시 가동·서버 배포, 기존 데이터 옮기기 등은
+     같은 폴더의 <b>SETUP-NEW-PC.md</b> 와 <b>webapp/DEPLOY.md</b> 에 있습니다.</p>
+
+  <div class="foot">QA 에이전트팀 · 내부 배포용 안내서 — 이 파일은 인터넷 없이도 열립니다.</div>
+</div>
+</body>
+</html>
