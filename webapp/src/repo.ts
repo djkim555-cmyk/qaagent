@@ -51,6 +51,32 @@ export function addMember(loginId: string, name: string, passwordHash: string, c
     .run(String(loginId).trim().toLowerCase(), name, s(contact), passwordHash, n(Date.now()))
   return Number(info.lastInsertRowid)
 }
+// 클라우드 뷰어에서 접수된 가입신청을 로컬 회원으로 흡수(sync.pullSignups 전용).
+//  - server.ts 의 /api/signup(=addMember) 과 동일한 컬럼·기본값으로 넣는다: status='pending', active=1.
+//  - password_hash 는 클라우드가 이미 계산한 HMAC 을 그대로 저장한다(평문은 오가지 않는다).
+//    전제: 클라우드 PW_HASH_SECRET == 로컬 QA_PW_PEPPER (해시 규칙 'pw:'+pw 동일).
+//  - 중복(같은 login_id 가 이미 있음)은 새로 만들지 않고 duplicate 로 알린다 → 호출측이 ack 하여
+//    클라우드에 계속 남아 매 사이클 재시도되는 것을 막는다.
+// 반환: created(신규 생성) | duplicate(이미 존재) | invalid(형식 불량) + 사유.
+const LOGIN_ID_IMPORT_RE = /^[a-z0-9._-]{4,20}$/ // server.ts LOGIN_ID_RE 와 동일 규칙(소문자 정규화 후 검사)
+const findLoginIdAnyStmt = db.prepare(`SELECT id, active FROM managers WHERE login_id = ?`)
+const insertImportedMemberStmt = db.prepare(
+  `INSERT INTO managers (login_id, name, contact, password_hash, status, active, created_at) VALUES (?, ?, ?, ?, 'pending', 1, ?)`,
+)
+export function importSignup(x: { loginId: string; name: string; contact?: string | null; passwordHash: string }):
+  { result: 'created' | 'duplicate' | 'invalid'; memberId?: number; reason?: string } {
+  const loginId = String(x?.loginId ?? '').trim().toLowerCase()
+  const name = String(x?.name ?? '').trim()
+  const passwordHash = String(x?.passwordHash ?? '').trim()
+  if (!LOGIN_ID_IMPORT_RE.test(loginId)) return { result: 'invalid', reason: '아이디 형식 불량(영문/숫자/._- 4~20자)' }
+  if (!name) return { result: 'invalid', reason: '이름 없음' }
+  if (!passwordHash) return { result: 'invalid', reason: '비밀번호 해시 없음' }
+  // 탈퇴(active=0) 회원도 login_id 유니크 인덱스를 점유하므로 active 무관하게 조회한다.
+  const dup = findLoginIdAnyStmt.get(loginId) as any
+  if (dup) return { result: 'duplicate', memberId: Number(dup.id), reason: `이미 존재하는 아이디(회원 #${dup.id}${dup.active ? '' : ', 탈퇴'})` }
+  const info = insertImportedMemberStmt.run(loginId, name, s(x?.contact), passwordHash, n(Date.now()))
+  return { result: 'created', memberId: Number(info.lastInsertRowid) }
+}
 export function approveMember(id: number) {
   db.prepare(`UPDATE managers SET status = 'approved' WHERE id = ?`).run(id)
 }

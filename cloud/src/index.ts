@@ -8,7 +8,7 @@
 //   S4 /mcp      → Bearer MCP PAT (외부 PC 개발자, 읽기 전용) — mcp.ts
 import { Hono } from 'hono'
 import { VIEWER_HTML } from './viewer'
-import { handleLogin, logout, sessionUser, loginPageHtml, type Identity } from './auth'
+import { handleLogin, handleSignup, logout, sessionUser, loginPageHtml, type Identity } from './auth'
 import { accessibleProjectIds, canSee, canSeeProject, runProjectId } from './access'
 import * as data from './data'
 import { handleMcp } from './mcp'
@@ -93,9 +93,11 @@ function safeEqStr(a: string, b: string): boolean {
   return r === 0
 }
 
-// 로그인 라우트(공유 비밀번호)
-app.get('/login', (c) => c.html(loginPageHtml()))
+// 로그인/회원가입 라우트(공개). 탭 상태는 ?tab=signup 쿼리로 표현한다(JS 없이 서버 렌더).
+app.get('/login', (c) => c.html(loginPageHtml('', '', { tab: c.req.query('tab') === 'signup' ? 'signup' : 'login' })))
 app.post('/auth/login', (c) => handleLogin(c))
+// 가입 "신청" 접수 — managers 가 아니라 signup_requests 에 쌓고, 로컬 웹앱이 회수·승인한다.
+app.post('/auth/signup', (c) => handleSignup(c))
 app.get('/auth/logout', (c) => logout(c))
 
 /* ───────────────── S1: A 데이터 ingest (단방향 복제) ───────────────── */
@@ -216,6 +218,36 @@ app.post('/sync/members', async (c) => {
   }
   await c.env.DB.batch(stmts)
   return json(c, { ok: true, upserted: { members: members.length, memberships: memberships.length } })
+})
+
+/* ───────────────── S1: 가입 신청 회수 (클라우드→로컬) ─────────────────
+   뷰어 /auth/signup 으로 접수된 신청을 로컬 웹앱이 가져가 "접속자 관리"에서 승인한다.
+   password_hash 가 실려 나가므로 반드시 /sync/* 프리픽스 안(= SYNC_TOKEN 미들웨어 보호) 에 둔다.
+   프리픽스를 벗어나 등록하면 가드 없이 해시가 공개된다. */
+app.get('/sync/signups', async (c) => {
+  const rows = (await c.env.DB.prepare(
+    `SELECT id, login_id, name, contact, password_hash, created_at FROM signup_requests ORDER BY id ASC LIMIT 200`,
+  ).all()).results
+  return json(c, { signups: rows })
+})
+
+// 로컬이 회수·반영을 마친 신청을 삭제한다(imported 플래그 대신 삭제 = 접수함이 비워진다).
+app.post('/sync/signups/ack', async (c) => {
+  const b = await c.req.json<any>().catch(() => ({}))
+  const ids = Array.isArray(b?.ids)
+    ? [...new Set(b.ids.map(Number).filter((n: number) => Number.isFinite(n) && n > 0))] as number[]
+    : []
+  if (!ids.length) return json(c, { ok: true, deleted: 0 })
+  // D1 은 쿼리당 바인딩 파라미터 100개 한도 → 90개씩 끊어 실행한다.
+  let deleted = 0
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90)
+    const r = await c.env.DB.prepare(
+      `DELETE FROM signup_requests WHERE id IN (${chunk.map(() => '?').join(',')})`,
+    ).bind(...chunk).run()
+    deleted += r.meta.changes || 0
+  }
+  return json(c, { ok: true, deleted })
 })
 
 /* ───────────────── S2: 뷰어 조회 (신원 기준 격리) ─────────────────

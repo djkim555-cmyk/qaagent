@@ -9,6 +9,7 @@
 //   B 트리아지(issues 트리아지·projects.hidden) = 양방향(push + pull, 행단위 LWW)
 //   C 비밀 = 미동기화
 import * as repo from './repo.js'
+import { isReservedLoginId } from './auth.js'
 
 const BASE = (process.env.CLOUD_SYNC_URL || '').replace(/\/$/, '')
 const TOKEN = process.env.SYNC_TOKEN || ''
@@ -60,6 +61,55 @@ export async function pushMembers(): Promise<boolean> {
   return true
 }
 
+// ── 가입신청 pull: 클라우드 뷰어에서 접수된 가입신청을 로컬 회원(승인대기)으로 회수한다 ──
+//   GET /sync/signups → 로컬 저장 확정 → POST /sync/signups/ack (확정된 id 만)
+// 회원 동기화는 로컬→클라우드 단방향(pushMembers)이라, 클라우드에서 발생한 가입은 이 경로로만 들어온다.
+// 흐름: 뷰어 가입신청 → (여기) 로컬 '접속자 관리'에 승인대기로 등장 → 관리자 승인 → 다음 pushMembers 로 클라우드 반영.
+//
+// ★ ack 순서 규칙: 로컬 저장이 확정된 건에 대해서만 ack 한다. 먼저 ack 하고 저장하다 실패하면 신청이 영영 사라진다.
+//   - created(신규 생성) → ack
+//   - duplicate(같은 login_id 이미 존재) → 생성하지 않지만 ack (안 하면 매 사이클 재시도되며 영구히 쌓인다)
+//   - invalid(형식 불량)·예약 아이디 → 재시도해도 절대 성공할 수 없으므로 사유를 남기고 ack (poison pill 방지)
+//   - 예외(DB 오류 등) → ack 하지 않음 → 클라우드에 남아 다음 주기에 재시도된다
+// 보안: password_hash 는 로그·리포트에 절대 출력하지 않는다(해시도 자격증명 취급).
+export async function pullSignups(): Promise<{ fetched: number; created: number; skipped: number; failed: number; acked: number } | null> {
+  if (!isEnabled()) return null
+  const data = await api('/sync/signups')
+  const list: any[] = Array.isArray(data?.signups) ? data.signups : []
+  const ackIds: number[] = []
+  let created = 0, skipped = 0, failed = 0
+  for (const row of list) {
+    const id = Number(row?.id)
+    if (!Number.isFinite(id) || id <= 0) { failed++; console.error('[sync] 가입신청 건너뜀 — 신청 id 없음/불량'); continue }
+    const loginId = String(row?.login_id ?? '')
+    try {
+      if (isReservedLoginId(loginId)) {
+        skipped++; ackIds.push(id)
+        console.warn(`[sync] 가입신청 #${id} 건너뜀(ack) — 예약된 아이디는 회원으로 만들 수 없음`)
+        continue
+      }
+      const r = repo.importSignup({ loginId, name: row?.name, contact: row?.contact, passwordHash: row?.password_hash })
+      if (r.result === 'created') {
+        created++; ackIds.push(id)
+        console.log(`[sync] 가입신청 #${id} → 로컬 회원 #${r.memberId} 생성(승인대기)`)
+      } else {
+        skipped++; ackIds.push(id)
+        console.warn(`[sync] 가입신청 #${id} 건너뜀(ack) — ${r.reason}`)
+      }
+    } catch (e) {
+      failed++ // ack 하지 않는다 → 클라우드에 남아 다음 주기 재시도
+      console.error(`[sync] 가입신청 #${id} 저장 실패(ack 보류, 다음 주기 재시도):`, (e as Error).message)
+    }
+  }
+  let acked = 0
+  if (ackIds.length) {
+    const res = await api('/sync/signups/ack', { method: 'POST', body: JSON.stringify({ ids: ackIds }) })
+    acked = Number(res?.deleted ?? ackIds.length)
+  }
+  if (list.length) console.log(`[sync] 가입신청 회수: 수신 ${list.length} · 생성 ${created} · 건너뜀 ${skipped} · 보류 ${failed} · ack ${acked}`)
+  return { fetched: list.length, created, skipped, failed, acked }
+}
+
 // ── B push: since 이후 로컬 트리아지 변경을 올린다 (POST /sync/triage) ──
 export async function pushTriage(since: number): Promise<any> {
   if (!isEnabled()) return null
@@ -76,7 +126,7 @@ export async function pullTriage(since: number): Promise<{ now: number; applied:
   return { now: Number(data.now), applied: result.applied }
 }
 
-// ── 1 사이클: A push → B push → B pull → 커서=서버 now (§6) ──
+// ── 1 사이클: 가입신청 pull → A push → B push → B pull → 커서=서버 now (§6) ──
 let running = false
 export async function syncCycle(): Promise<{ ok: boolean; reason?: string }> {
   if (!isEnabled()) return { ok: false, reason: 'disabled' }
@@ -84,6 +134,9 @@ export async function syncCycle(): Promise<{ ok: boolean; reason?: string }> {
   running = true
   try {
     const since = repo.getLastSyncAt()
+    // 가입신청 회수를 push 보다 먼저 — 방금 만든 승인대기 회원이 같은 사이클의 pushMembers 로 클라우드에 반영된다.
+    // 실패해도 아래 run/트리아지 동기화는 계속한다(실패 격리).
+    try { await pullSignups() } catch (e) { console.error('[sync] 가입신청 회수 실패(다음 주기 재시도):', (e as Error).message) }
     await pushMembers()
     await pushUnpublishedRuns()
     await pushTriage(since)
