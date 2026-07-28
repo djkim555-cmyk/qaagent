@@ -63,4 +63,5 @@ export default {
       } catch (e) { this.saveErr = e.message }
       this.saving = false
     },
+  },
 }

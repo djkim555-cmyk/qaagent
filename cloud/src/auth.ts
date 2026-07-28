@@ -29,6 +29,16 @@ function b64urlDecode(s: string): string {
   while (s.length % 4) s += '='
   return decodeURIComponent(escape(atob(s)))
 }
+// 시크릿 fail-closed — 미설정 시 enc(undefined) 가 문자열 "undefined" 를 키로 써서
+// **누구나 {r:'super'} 쿠키를 위조**할 수 있게 된다(로컬 웹앱은 requireSecret 로 이미 막고 있다).
+// 공개된 기본값도 거부한다(이미 노출된 자격증명이므로).
+const PUBLIC_DEFAULTS = ['change-me', 'qa-agent-team-internal-secret-v1', 'malgnqa']
+class SecretMissing extends Error {}
+function requireSecret(name: string, v: unknown): string {
+  const s = String(v ?? '').trim()
+  if (!s || PUBLIC_DEFAULTS.includes(s)) throw new SecretMissing(`[auth] 필수 시크릿 ${name} 가 설정되지 않았거나 공개 기본값입니다.`)
+  return s
+}
 async function importKey(secret: string) {
   return crypto.subtle.importKey('raw', enc(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
 }
@@ -51,7 +61,7 @@ function safeEq(a: string, b: string): boolean {
 
 async function issueSession(c: Context, id: Identity) {
   const body = b64url(JSON.stringify({ r: id.role, m: id.memberId, u: id.label, exp: Math.floor(Date.now() / 1000) + MAX_AGE }))
-  const sig = await hmacB64(c.env.SESSION_SECRET, body)
+  const sig = await hmacB64(requireSecret('SESSION_SECRET', c.env.SESSION_SECRET), body)
   setCookie(c, SESS, `${body}.${sig}`, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: MAX_AGE })
 }
 
@@ -62,7 +72,9 @@ export async function sessionUser(c: Context): Promise<Identity | null> {
   const dot = raw.lastIndexOf('.')
   if (dot < 1) return null
   const body = raw.slice(0, dot), sig = raw.slice(dot + 1)
-  if (!safeEq(sig, await hmacB64(c.env.SESSION_SECRET, body))) return null
+  let secret: string
+  try { secret = requireSecret('SESSION_SECRET', c.env.SESSION_SECRET) } catch { return null } // fail-closed
+  if (!safeEq(sig, await hmacB64(secret, body))) return null
   try {
     const o = JSON.parse(b64urlDecode(body))
     if (!o.exp || o.exp < Math.floor(Date.now() / 1000)) return null
@@ -78,10 +90,19 @@ export async function handleLogin(c: Context): Promise<Response> {
   const pw = String(form.password || '')
   if (!loginId || !pw) return c.html(loginPageHtml('아이디와 비밀번호를 입력하세요.', loginId), 400)
 
+  try { requireSecret('SESSION_SECRET', c.env.SESSION_SECRET) } catch {
+    return c.html(loginPageHtml('서버 인증 설정 오류(SESSION_SECRET). 관리자에게 알려주세요.', loginId), 503)
+  }
   const superId = String(c.env.SUPER_ID || 'admin').trim().toLowerCase()
   // 슈퍼관리자: 전용 아이디 + 마스터 비밀번호
   if (loginId === superId) {
-    if (c.env.SUPER_PASSWORD && safeEq(pw, String(c.env.SUPER_PASSWORD))) {
+    // 슈퍼 비밀번호도 fail-closed — 미설정이거나 문서에 공개된 기본값(malgnqa 등)이면 로그인 자체를 막는다.
+    // 슈퍼 계정은 MCP 토큰 발급 권한까지 가지므로 탈취 시 피해가 "조회"에서 "지속적 자격 발급"으로 커진다.
+    let superPw: string
+    try { superPw = requireSecret('SUPER_PASSWORD', c.env.SUPER_PASSWORD) } catch {
+      return c.html(loginPageHtml('서버 인증 설정 오류(SUPER_PASSWORD). 관리자에게 알려주세요.', loginId), 503)
+    }
+    if (safeEq(pw, superPw)) {
       await issueSession(c, { role: 'super', memberId: null, label: 'admin' })
       return c.redirect('/')
     }

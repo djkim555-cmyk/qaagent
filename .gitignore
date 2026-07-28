@@ -2,6 +2,14 @@
 config/target.json
 config/.auth/
 reports/runs/
+# 시크릿 파일 — 예시(.env.example)만 커밋한다
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+# MCP 접속 설정에 토큰을 직접 넣지 않는다(환경변수 참조). 로컬 개인 설정은 커밋 금지
+.claude/settings.local.json
 
 # 의존성 / 빌드 산출물
 node_modules/

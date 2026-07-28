@@ -43,6 +43,7 @@ tailwind.config = { theme: { extend: {
     </div>
     <div class="flex items-center gap-3 shrink-0">
       <span class="badge bg-slate-100 text-slate-500">조회 + 트리아지 편집</span>
+      <a href="#/tokens" class="text-xs text-slate-500 hover:text-primary-600">MCP 토큰</a>
       <a href="/auth/logout" class="text-xs text-slate-400 hover:text-slate-600">로그아웃</a>
     </div>
   </header>
@@ -154,10 +155,14 @@ tailwind.config = { theme: { extend: {
       </div>
       <h1 class="text-lg font-semibold tracking-tight mb-4">{{ issue.title }}</h1>
       <dl class="space-y-3">
-        <div v-for="f in fields" :key="f.k" v-if="issue[f.k]">
-          <div class="lbl">{{ f.label }}</div>
-          <div class="text-slate-700 whitespace-pre-line">{{ issue[f.k] }}</div>
-        </div>
+        <!-- v-for 와 v-if 를 같은 엘리먼트에 쓰면 Vue 3 는 v-if 를 먼저 평가해 f 가 undefined →
+             렌더가 throw 되고 앱 전체가 빈 화면이 된다. template v-for 로 감싸 분리한다. -->
+        <template v-for="f in fields" :key="f.k">
+          <div v-if="issue[f.k]">
+            <div class="lbl">{{ f.label }}</div>
+            <div class="text-slate-700 whitespace-pre-line">{{ issue[f.k] }}</div>
+          </div>
+        </template>
       </dl>
     </div>
 
@@ -180,6 +185,74 @@ tailwind.config = { theme: { extend: {
         <div class="text-xs text-slate-400">변경 즉시 저장 · 다음 동기화 때 로컬에도 반영됩니다.</div>
         <div v-if="saveErr" class="text-xs text-red-600">{{ saveErr }}</div>
       </div>
+    </div>
+  </section>
+
+  <!-- MCP 토큰 — 다른 PC 개발자가 Claude Code 등에서 이 뷰어를 조회할 때 쓰는 개인 자격 -->
+  <section v-else-if="view==='tokens'">
+    <h1 class="text-lg font-semibold tracking-tight mb-1">MCP 접속 토큰</h1>
+    <p class="text-slate-500 text-sm mb-4">
+      다른 PC의 개발자가 Claude Code 등 MCP 클라이언트로 <b>이 뷰어의 QA 결과를 조회</b>할 때 쓰는 개인 자격입니다.
+      토큰은 <b>소유 회원의 권한 그대로</b>만 조회하며(그 이상 불가), <b>읽기 전용</b>입니다.
+    </p>
+
+    <div v-if="mint.token" class="card p-5 mb-4" style="border-left:3px solid #2B7FFF">
+      <div class="lbl">발급된 토큰 — 이 화면을 벗어나면 다시 볼 수 없습니다</div>
+      <div class="font-mono text-xs break-all bg-slate-50 rounded p-3 ring-1 ring-inset ring-slate-200">{{ mint.token }}</div>
+      <div class="flex gap-2 mt-3">
+        <button class="btn-primary" @click="copyToken">{{ mint.copied ? '복사됨' : '복사' }}</button>
+        <button class="btn-ghost" @click="mint.token=''">닫기</button>
+      </div>
+      <div class="text-xs text-slate-500 mt-3">
+        개발자 PC에서(토큰을 파일에 직접 적지 말고 환경변수로):<br />
+        <code class="text-[11px]">$env:QA_MCP_TOKEN="&lt;토큰&gt;"</code> →
+        <code class="text-[11px]">claude mcp add --transport http --scope user qa-viewer {{ mcpUrl }} --header "Authorization: Bearer $env:QA_MCP_TOKEN"</code>
+      </div>
+    </div>
+
+    <div class="card p-5 mb-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div v-if="canMintForOthers">
+          <div class="lbl">소유 회원</div>
+          <select v-model="mint.memberId" class="inp">
+            <option :value="null">선택…</option>
+            <option v-for="m in mintMembers" :key="m.id" :value="m.id">{{ m.name || m.login_id }} ({{ m.login_id }}) · 프로젝트 {{ m.project_count }}</option>
+          </select>
+        </div>
+        <div><div class="lbl">라벨(사용할 PC·용도)</div>
+          <input v-model="mint.label" class="inp" placeholder="예: 김개발 사무실 PC" /></div>
+        <div><div class="lbl">유효기간</div>
+          <select v-model.number="mint.days" class="inp"><option :value="7">7일</option><option :value="30">30일</option><option :value="90">90일(최대)</option></select></div>
+        <div><button class="btn-primary w-full" :disabled="mint.busy" @click="createToken">{{ mint.busy ? '발급 중…' : '토큰 발급' }}</button></div>
+      </div>
+      <div v-if="mint.err" class="text-xs text-red-600 mt-2">{{ mint.err }}</div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-500 text-xs">
+          <tr><th class="text-left px-4 py-2.5">라벨</th><th class="text-left px-4 py-2.5">소유</th>
+              <th class="text-left px-4 py-2.5">지문</th><th class="text-left px-4 py-2.5">만료</th>
+              <th class="text-left px-4 py-2.5">마지막 사용</th><th class="text-left px-4 py-2.5">상태</th><th class="px-4 py-2.5"></th></tr>
+        </thead>
+        <tbody>
+          <tr v-if="!tokens.length"><td colspan="7" class="px-4 py-8 text-center text-slate-400">발급된 토큰이 없습니다.</td></tr>
+          <tr v-for="t in tokens" :key="t.id" class="border-t border-slate-100">
+            <td class="px-4 py-2.5">{{ t.label }}</td>
+            <td class="px-4 py-2.5 text-slate-500">{{ t.member_login || ('#'+t.member_id) }}</td>
+            <td class="px-4 py-2.5 font-mono text-xs text-slate-400">{{ t.fingerprint }}</td>
+            <td class="px-4 py-2.5 text-slate-500">{{ fmt(t.expires_at) }}</td>
+            <td class="px-4 py-2.5 text-slate-500">{{ t.last_used_at ? fmt(t.last_used_at) : '—' }}</td>
+            <td class="px-4 py-2.5">
+              <span class="badge" :class="t.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'">
+                {{ t.revoked_at ? '폐기됨' : (t.expired ? '만료' : '사용 가능') }}</span>
+            </td>
+            <td class="px-4 py-2.5 text-right">
+              <button v-if="t.active" class="btn-ghost h-7 px-2 text-xs" @click="revokeToken(t)">폐기</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -206,6 +279,9 @@ createApp({
     projectsById:{},
     savingId:null, savedMsg:'', savedErr:false,
     memo:{ open:false, target:null, draft:'', saving:false },
+    tokens:[], mintMembers:[], canMintForOthers:false,
+    mint:{ memberId:null, label:'', days:30, busy:false, err:'', token:'', copied:false },
+    mcpUrl: location.origin + '/mcp',
     form:{ category:null, status:null, assignee_id:null, memo:'' }, saving:false, saved:false, saveErr:'',
     CATS:['문의','오류','기능개선','제안','성공'], STS:['열림','진행중','완료','보류'],
     fields:[ {k:'symptom',label:'현상'},{k:'repro',label:'재현 단계'},{k:'expected',label:'기대 동작'},
@@ -227,7 +303,11 @@ createApp({
       const r = await fetch('/api'+path, Object.assign({ credentials:'include', headers:{'Content-Type':'application/json'} }, opts))
       if (r.status===401) { location.href = '/login'; throw new Error('로그인이 필요합니다.') }
       if (r.status===403) throw new Error('접근 권한이 없습니다.')
-      if (!r.ok) throw new Error('HTTP '+r.status)
+      if (!r.ok) {
+        var msg = ''
+        try { msg = (await r.json()).message || '' } catch(e) {}
+        throw new Error(msg || ('HTTP '+r.status))
+      }
       return r.json()
     },
     go(h) { location.hash = h },
@@ -240,6 +320,7 @@ createApp({
       const h = location.hash.replace(/^#/,'') || '/'
       const m = h.match(/^\\/(projects|runs|issues)\\/(.+)$/)
       if (m) return { view:{projects:'project',runs:'run',issues:'issue'}[m[1]], id:decodeURIComponent(m[2]) }
+      if (h.replace(/\\/$/,'') === '/tokens') return { view:'tokens', id:null }
       return { view:'home', id:null }
     },
     async load() {
@@ -263,7 +344,34 @@ createApp({
           this.form = { category:this.issue.category, status:this.issue.status||'열림', assignee_id:this.issue.assignee_id??null, memo:this.issue.memo||'' }
           this.saved=false; this.saveErr=''
         }
+        else if (r.view==='tokens') { await this.loadTokens() }
       } catch(e) { this.error = e.message } finally { this.loading = false }
+    },
+    /* ── MCP 토큰 ── */
+    async loadTokens() {
+      const d = await this.api('/mcp-tokens')
+      this.tokens = d.tokens || []
+      this.canMintForOthers = !!d.can_mint_for_others
+      if (this.canMintForOthers) {
+        try { this.mintMembers = (await this.api('/mcp-tokens/members')).members || [] } catch(e) { this.mintMembers = [] }
+      }
+    },
+    async createToken() {
+      this.mint.busy = true; this.mint.err = ''; this.mint.token = ''; this.mint.copied = false
+      try {
+        const body = { label:this.mint.label, days:this.mint.days }
+        if (this.canMintForOthers) body.memberId = this.mint.memberId
+        const d = await this.api('/mcp-tokens', { method:'POST', body:JSON.stringify(body) })
+        this.mint.token = d.token; this.mint.label = ''
+        await this.loadTokens()
+      } catch(e) { this.mint.err = e.message } finally { this.mint.busy = false }
+    },
+    async copyToken() {
+      try { await navigator.clipboard.writeText(this.mint.token); this.mint.copied = true; setTimeout(()=>{ this.mint.copied=false }, 2000) } catch(e) {}
+    },
+    async revokeToken(t) {
+      if (!confirm('이 토큰을 폐기하면 해당 PC의 MCP 접속이 즉시 끊깁니다. 계속할까요?')) return
+      try { await this.api('/mcp-tokens/'+t.id, { method:'DELETE' }); await this.loadTokens() } catch(e) { alert('폐기 실패: ' + e.message) }
     },
     // 상세 화면 트리아지 — 구분/상태/담당자/메모 변경 즉시 저장
     async saveField() {
