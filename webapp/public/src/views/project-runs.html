@@ -17,9 +17,10 @@
   <div class="flex items-center justify-between mb-3 gap-2">
     <div class="flex items-center gap-2">
       <span class="card-h m-0">등록된 시나리오 ({{ scenarios.length }})</span>
-      <button class="flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 normal-case tracking-normal" @click="scenOpen = !scenOpen">
-        <i v-if="scenOpen" data-lucide="chevron-down" class="size-3.5"></i>
-        <i v-else data-lucide="chevron-right" class="size-3.5"></i>
+      <button class="flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 normal-case tracking-normal" @click="scenOpen = !scenOpen" :aria-expanded="scenOpen ? 'true' : 'false'">
+        <!-- chevron(lucide chevron-down 동형) — data-lucide 대신 인라인 SVG.
+             lucide 가 <i> 를 <svg> 로 교체하면 Vue 가 v-if 아이콘을 교체할 때 분리된 노드를 패치해 토글이 멈춘다 -->
+        <svg class="size-3.5 transition-transform" :class="scenOpen ? '' : '-rotate-90'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         {{ scenOpen ? '닫기' : '열기' }}
       </button>
     </div>
@@ -30,7 +31,7 @@
     </div>
   </div>
   <template v-if="scenOpen">
-    <div v-if="!scenarios.length" class="empty">등록된 시나리오가 없습니다. <b>기존 파일 등록</b> 또는 <b>AI 시나리오 만들기</b>로 추가하세요.</div>
+    <div v-if="!scenarios.length" class="empty">이 프로젝트에 등록된 시나리오가 없습니다. <b>기존 파일 등록</b> 또는 <b>AI 시나리오 만들기</b>로 추가하세요.</div>
     <div v-else class="overflow-x-auto -mx-5">
       <table class="tbl">
         <thead><tr><th class="w-9"></th><th>시나리오 파일</th><th class="text-right">동작</th></tr></thead>
@@ -41,12 +42,42 @@
             <td class="text-right whitespace-nowrap">
               <button class="btn btn-outline btn-sm" @click="openPreview(s)"><i data-lucide="eye"></i> 보기</button>
               <button class="btn btn-ghost btn-sm ml-1" @click="openAi(s)"><i data-lucide="pencil"></i> AI로 편집</button>
+              <button class="btn btn-outline btn-sm ml-1 text-red-600 ring-red-200 hover:bg-red-50" @click="removeScenario(s)" :disabled="scenBusy === s"><i data-lucide="trash-2"></i> {{ scenBusy === s ? '삭제 중…' : '삭제' }}</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
   </template>
+
+  <!-- 미분류 시나리오 — 소유 프로젝트가 없는 레거시 파일(있을 때만 노출) -->
+  <div v-if="unassigned.length" class="mt-4 pt-4 border-t border-slate-100">
+    <div class="flex items-center gap-2">
+      <span class="card-h m-0">미분류 시나리오 ({{ unassigned.length }})</span>
+      <button class="flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 normal-case tracking-normal" @click="unassignedOpen = !unassignedOpen" :aria-expanded="unassignedOpen ? 'true' : 'false'">
+        <svg class="size-3.5 transition-transform" :class="unassignedOpen ? '' : '-rotate-90'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        {{ unassignedOpen ? '닫기' : '열기' }}
+      </button>
+    </div>
+    <template v-if="unassignedOpen">
+      <div class="small muted mt-1">프로젝트에 배정되지 않은 파일입니다. 이 프로젝트로 배정하거나 삭제하세요.</div>
+      <div class="overflow-x-auto -mx-5 mt-2">
+        <table class="tbl">
+          <thead><tr><th>시나리오 파일</th><th class="text-right">동작</th></tr></thead>
+          <tbody>
+            <tr v-for="u in unassigned" :key="u">
+              <td class="mono small">{{ u.replace('scenarios/', '') }}</td>
+              <td class="text-right whitespace-nowrap">
+                <button class="btn btn-soft btn-sm" @click="assignScenario(u)" :disabled="scenBusy === u"><i data-lucide="folder-input"></i> {{ scenBusy === u ? '배정 중…' : '이 프로젝트로 배정' }}</button>
+                <button class="btn btn-outline btn-sm ml-1 text-red-600 ring-red-200 hover:bg-red-50" @click="removeScenario(u)" :disabled="scenBusy === u"><i data-lucide="trash-2"></i> {{ scenBusy === u ? '삭제 중…' : '삭제' }}</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </div>
+
   <div v-if="uploadMsg" class="small mt-2" :class="uploadMsg.cls">{{ uploadMsg.text }}</div>
 </div></div>
 
@@ -116,7 +147,7 @@
       <button class="icon-btn" @click="showPick = false" aria-label="닫기"><i data-lucide="x"></i></button>
     </div>
     <div class="px-5 py-4 max-h-[60vh] overflow-y-auto">
-      <div v-if="!scenarios.length" class="empty">등록된 시나리오가 없습니다.</div>
+      <div v-if="!scenarios.length" class="empty">이 프로젝트에 등록된 시나리오가 없습니다.</div>
       <div v-else class="space-y-1.5">
         <label v-for="s in scenarios" :key="s" class="flex items-center gap-3 px-3 py-2 rounded-md ring-1 ring-inset ring-slate-200 hover:bg-slate-50 cursor-pointer">
           <input type="checkbox" :value="s" v-model="selected" class="size-4 rounded border-slate-300 text-primary-500 focus:ring-primary-500" />

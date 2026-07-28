@@ -127,15 +127,48 @@ const canSeeProject = (id: Identity, project: any) =>
 
 // 회원은 자신이 등록한 시나리오 또는 자신이 매칭된 프로젝트의 시나리오만(슈퍼관리자는 전부).
 // 미등록/레거시 파일은 슈퍼관리자만 본다.
-const scenariosFor = (id: Identity): string[] => {
+//
+// projectId 가 주어지면 **프로젝트 스코프**로 좁힌다(역할 무관 — 최고관리자도 그 프로젝트 소속만 본다).
+// 회원의 기존 권한 규칙(자기 등록분 = o.managerId 일치)도 이 스코프 안에서만 유효하다
+// → "내가 등록했지만 다른 프로젝트 소속"인 시나리오는 이 프로젝트 탭에 노출되지 않는다.
+const scenariosFor = (id: Identity, projectId?: number | null): string[] => {
   const all = listScenarioFiles()
-  if (id.role === 'super') return all
   const owners = repo.scenarioOwnerMap()
+  const pid = projectId == null ? null : Number(projectId)
+  if (pid != null) {
+    const myProjects = id.managerId == null ? [] : repo.memberProjectIds(id.managerId)
+    return all.filter((p) => {
+      const o = owners[p]
+      if (!o || o.projectId !== pid) return false            // 이 프로젝트 소속만
+      if (id.role === 'super') return true
+      return o.managerId === id.managerId || myProjects.includes(pid)
+    })
+  }
+  if (id.role === 'super') return all
   const myProjects = id.managerId == null ? [] : repo.memberProjectIds(id.managerId)
   return all.filter((p) => {
     const o = owners[p]
     return o && (o.managerId === id.managerId || (o.projectId != null && myProjects.includes(o.projectId)))
   })
+}
+// 미분류(레거시) 시나리오 = scenario_owners 에 행이 아예 없는 파일. 최고관리자에게만 노출한다.
+const unassignedScenarios = (id: Identity): string[] => {
+  if (id.role !== 'super') return []
+  const owners = repo.scenarioOwnerMap()
+  return listScenarioFiles().filter((p) => !owners[p])
+}
+
+// 시나리오 경로 검증 — 'scenarios/<파일명>.md' 형태만 허용(경로 탈출·하위폴더·숨김 파일 차단).
+// 반환: 정상이면 절대경로, 위반이면 null.
+const SCENARIO_PATH_RE = /^scenarios\/[^/\\]+\.md$/
+function safeScenarioAbs(p: string): string | null {
+  if (!SCENARIO_PATH_RE.test(p)) return null
+  const name = p.slice('scenarios/'.length)
+  if (name.includes('..') || name.startsWith('_')) return null   // '..' 탈출 · '_' 접두(_template/_trash) 보호
+  const root = path.join(PROJECT_ROOT, 'scenarios')
+  const abs = path.resolve(PROJECT_ROOT, p)
+  if (!abs.startsWith(root + path.sep)) return null
+  return abs
 }
 // 시나리오 접근(읽기/실행) 권한: 슈퍼관리자 전부, 회원은 자신 등록분 또는 매칭 프로젝트의 것
 const canSeeScenario = (id: Identity, p: string): boolean => {
@@ -265,14 +298,21 @@ app.get('/api/projects/:id/personas', (req, res) => {
   res.json({ project, saved: repo.listProjectPersonas(project.id), poolSize: pool.poolSize() })
 })
 
+// scenarios = 이 프로젝트 소속 시나리오만 · unassigned = 소유행이 없는 미분류(최고관리자 전용, 회원은 [])
 app.get('/api/projects/:id/scenarios', (req, res) => {
   const project = loadProject(req, res); if (!project) return
-  res.json({ project, scenarios: scenariosFor(ident(req)) })
+  res.json({ project, scenarios: scenariosFor(ident(req), project.id), unassigned: unassignedScenarios(ident(req)) })
 })
 
 app.get('/api/projects/:id/runs', (req, res) => {
   const project = loadProject(req, res); if (!project) return
-  res.json({ project, scenarios: scenariosFor(ident(req)), runs: repo.listRunsByProject(project.id), env: envInfo() })
+  res.json({
+    project,
+    scenarios: scenariosFor(ident(req), project.id),
+    unassigned: unassignedScenarios(ident(req)),
+    runs: repo.listRunsByProject(project.id),
+    env: envInfo(),
+  })
 })
 
 app.get('/api/projects/:id/runs/:runId', (req, res) => {
@@ -399,6 +439,12 @@ app.post('/api/runs', (req, res) => {
   if (!canSeeProject(ident(req), project)) return fail(res, 403, '이 프로젝트를 실행할 권한이 없습니다.')
   if (!scenario || !fs.existsSync(path.join(PROJECT_ROOT, scenario))) return fail(res, 400, `시나리오 없음: ${scenario}`)
   if (!canSeeScenario(ident(req), String(scenario))) return fail(res, 403, '이 시나리오를 실행할 권한이 없습니다.')
+  // 교차 프로젝트 실행 차단 — 다른 프로젝트 소속 시나리오는 거절.
+  // (owner 가 없는 미분류는 canSeeScenario 가 이미 최고관리자만 통과시킨다)
+  const owner = repo.getScenarioOwner(String(scenario))
+  if (owner?.projectId != null && Number(owner.projectId) !== Number(project.id)) {
+    return fail(res, 400, '이 시나리오는 다른 프로젝트 소속입니다.')
+  }
   const n = Math.max(1, Math.min(20, Number(personaCount) || 5))
   const base = path.basename(scenario).replace(/\.md$/, '')
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
@@ -623,6 +669,42 @@ app.get('/api/scenarios/file', (req, res) => {
   if (!canSeeScenario(ident(req), p)) return fail(res, 403, '이 시나리오에 접근할 권한이 없습니다.')
   try { res.json({ markdown: readScenarioFile(p) }) }
   catch (e: any) { fail(res, 404, e?.message || 'not found') }
+})
+
+// 시나리오 삭제 = 소프트 삭제. 파일을 지우지 않고 scenarios/_trash/ 로 옮긴 뒤 소유행만 제거한다.
+// (listScenarioFiles 는 최상위 .md 만 읽으므로 _trash 하위는 목록에 다시 잡히지 않는다)
+// 실행 이력(runs)은 삭제하지 않는다 — 참조 건수만 응답으로 알려준다.
+app.delete('/api/scenarios', (req, res) => {
+  const p = String(req.query.path ?? '')
+  const abs = safeScenarioAbs(p)
+  if (!abs) return fail(res, 400, '잘못된 시나리오 경로입니다.')
+  if (!canSeeScenario(ident(req), p)) return fail(res, 403, '이 시나리오를 삭제할 권한이 없습니다.')
+  if (!fs.existsSync(abs)) return fail(res, 404, '시나리오 파일을 찾을 수 없습니다.')
+  try {
+    const trashDir = path.join(PROJECT_ROOT, 'scenarios', '_trash')
+    fs.mkdirSync(trashDir, { recursive: true })
+    const base = path.basename(abs)
+    let dest = path.join(trashDir, base)
+    if (fs.existsSync(dest)) dest = path.join(trashDir, `${base.replace(/\.md$/, '')}-${Date.now()}.md`)  // 이름 충돌 시 타임스탬프 접미
+    const runsReferencing = repo.countRunsByScenario(p)
+    fs.renameSync(abs, dest)
+    repo.deleteScenarioOwner(p)
+    res.json({ ok: true, trashed: `scenarios/_trash/${path.basename(dest)}`, runsReferencing })
+  } catch (e: any) { fail(res, 500, e?.message || '삭제 실패') }
+})
+
+// 미분류 시나리오를 프로젝트에 배정(소유권 기록) — 최고관리자 전용
+app.post('/api/scenarios/assign', requireSuper, (req, res) => {
+  const p = String(req.body?.path ?? '')
+  const abs = safeScenarioAbs(p)
+  if (!abs) return fail(res, 400, '잘못된 시나리오 경로입니다.')
+  if (!fs.existsSync(abs)) return fail(res, 404, '시나리오 파일을 찾을 수 없습니다.')
+  const projectId = Number(req.body?.projectId)
+  if (!Number.isFinite(projectId) || projectId <= 0) return fail(res, 400, '프로젝트를 선택하세요.')
+  const project = repo.getProject(projectId)
+  if (!project) return fail(res, 400, '프로젝트를 찾을 수 없습니다.')
+  repo.setScenarioOwner(p, project.manager_id == null ? null : Number(project.manager_id), project.id)
+  res.json({ ok: true })
 })
 
 // 알 수 없는 API → 404 JSON

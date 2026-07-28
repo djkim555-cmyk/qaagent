@@ -4,6 +4,7 @@ export default {
       id: '',
       project: { name: '', base_url: '' },
       scenarios: [],
+      unassigned: [],
       runs: [],
       env: {},
       selected: [],
@@ -14,6 +15,8 @@ export default {
       loaded: false,
       uploadMsg: null,
       scenOpen: true,
+      unassignedOpen: true,
+      scenBusy: '', // 삭제·배정 진행 중인 시나리오 경로(중복 클릭 방지)
       // 시나리오 선택 / 미리보기 팝업
       showPick: false,
       showPreview: false,
@@ -73,6 +76,8 @@ export default {
         const r = await this.$api.get('/api/projects/' + this.id + '/runs')
         this.project = r.project || this.project
         this.scenarios = r.scenarios || []
+        // 미분류(소유 프로젝트 없는 레거시 파일) — 미지원 응답이면 빈 배열로 폴백
+        this.unassigned = r.unassigned || []
         this.runs = r.runs || []
         this.env = r.env || {}
         // 더 이상 존재하지 않는 시나리오는 선택 해제
@@ -109,6 +114,13 @@ export default {
       if (!r.ok) throw new Error(data.message || '불러올 수 없습니다')
       return data.markdown || ''
     },
+    // 시나리오 파일 삭제 — 위와 같은 이유로 raw fetch 사용(쿼리스트링 보존)
+    async deleteScenarioFile(p) {
+      const r = await fetch('/api/scenarios?path=' + encodeURIComponent(p), { method: 'DELETE', headers: { Accept: 'application/json' } })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok || data.ok === false) throw new Error(data.message || '삭제할 수 없습니다')
+      return data
+    },
     async openPreview(s) {
       this.previewPath = s
       this.previewMd = ''
@@ -121,6 +133,35 @@ export default {
         this.previewMd = await this.loadScenario(s)
       } catch (err) { this.previewErr = '불러오기 실패: ' + err.message }
       this.previewLoading = false
+      this.refreshIcons()
+    },
+    // ── 시나리오 삭제 / 프로젝트 배정 ──
+    shortName(p) { return (p || '').replace('scenarios/', '') },
+    async removeScenario(s) {
+      if (this.scenBusy) return
+      const name = this.shortName(s)
+      if (!confirm('시나리오 파일 「' + name + '」을(를) 삭제합니다.\n삭제하면 목록·실행 선택에서 사라집니다. 계속할까요?')) return
+      this.scenBusy = s; this.uploadMsg = { cls: 'muted', text: '삭제 중…' }
+      try {
+        const data = await this.deleteScenarioFile(s)
+        const refs = Number(data.runsReferencing) || 0
+        this.selected = this.selected.filter((x) => x !== s)
+        await this.load()
+        this.uploadMsg = { cls: 'text-mint', text: '✓ 삭제됨: ' + name + (refs > 0 ? ' (실행 이력 ' + refs + '건은 유지됩니다)' : '') }
+      } catch (e) { this.uploadMsg = { cls: 'text-red-600', text: '삭제 실패: ' + e.message } }
+      this.scenBusy = ''
+      this.refreshIcons()
+    },
+    async assignScenario(s) {
+      if (this.scenBusy) return
+      const name = this.shortName(s)
+      this.scenBusy = s; this.uploadMsg = { cls: 'muted', text: '배정 중…' }
+      try {
+        await this.$api.post('/api/scenarios/assign', { path: s, projectId: Number(this.id) })
+        await this.load()
+        this.uploadMsg = { cls: 'text-mint', text: '✓ 이 프로젝트로 배정됨: ' + name }
+      } catch (e) { this.uploadMsg = { cls: 'text-red-600', text: '배정 실패: ' + e.message } }
+      this.scenBusy = ''
       this.refreshIcons()
     },
     // ── AI 시나리오 모달 ──
@@ -280,5 +321,6 @@ export default {
   },
   watch: {
     scenOpen() { this.refreshIcons() },
+    unassignedOpen() { this.refreshIcons() },
   },
 }

@@ -177,6 +177,22 @@ export function scenarioOwnerMap(): Record<string, { managerId: number | null; p
   for (const r of rows) m[r.path] = { managerId: r.manager_id == null ? null : Number(r.manager_id), projectId: r.project_id == null ? null : Number(r.project_id) }
   return m
 }
+// 단건 조회 — path 의 소유 정보. 행이 없으면 null(= 미분류/레거시).
+const getScenarioOwnerStmt = db.prepare(`SELECT manager_id, project_id FROM scenario_owners WHERE path = ?`)
+export function getScenarioOwner(path: string): { managerId: number | null; projectId: number | null } | null {
+  const r = getScenarioOwnerStmt.get(s(path)) as any
+  if (!r) return null
+  return { managerId: r.manager_id == null ? null : Number(r.manager_id), projectId: r.project_id == null ? null : Number(r.project_id) }
+}
+// 시나리오 소유행 제거 — 파일을 휴지통으로 옮길 때 가시성 레코드도 함께 정리한다.
+const deleteScenarioOwnerStmt = db.prepare(`DELETE FROM scenario_owners WHERE path = ?`)
+export function deleteScenarioOwner(path: string) {
+  deleteScenarioOwnerStmt.run(s(path))
+}
+// 이 시나리오 경로를 참조하는 실행 건수 — 삭제해도 실행 이력은 남는다(경로 문자열만 유지)는 안내용.
+const countRunsByScenarioStmt = db.prepare(`SELECT COUNT(*) c FROM runs WHERE scenario = ?`)
+export const countRunsByScenario = (path: string): number => n((countRunsByScenarioStmt.get(s(path)) as any)?.c)
+
 // 회원이 매칭된 프로젝트 id 집합(시나리오 가시성·접근 판정용)
 export function memberProjectIds(memberId: number): number[] {
   return (db.prepare(`SELECT project_id FROM project_members WHERE member_id = ?`).all(memberId) as any[]).map((r) => Number(r.project_id))
