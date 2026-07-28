@@ -14,8 +14,23 @@ import * as sync from './sync.js'
 
 const app = express()
 const PUBLIC_DIR = path.join(WEBAPP_ROOT, 'public')
-app.use(express.json())
-app.use(express.urlencoded({ extended: false }))
+// 본문 한도 — 기본 100kb 로는 큰 시나리오 md 등록이 413 으로 막힌다(실사례). 여유 있게 5mb.
+const BODY_LIMIT = '5mb'
+app.use(express.json({ limit: BODY_LIMIT }))
+app.use(express.urlencoded({ extended: false, limit: BODY_LIMIT }))
+// 본문 파싱 실패를 HTML 스택트레이스 대신 JSON 으로 — 프론트($api)는 message 필드를 읽는다.
+app.use((err: any, _req: Request, res: Response, next: (e?: any) => void) => {
+  if (!err) return next()
+  if (err.type === 'entity.too.large') {
+    const msg = `파일이 너무 큽니다(최대 ${BODY_LIMIT}). 시나리오를 나눠 등록해 주세요.`
+    return res.status(413).json({ error: msg, message: msg })
+  }
+  if (err instanceof SyntaxError && 'body' in err) {
+    const msg = '요청 본문을 해석할 수 없습니다(JSON 형식 오류).'
+    return res.status(400).json({ error: msg, message: msg })
+  }
+  return next(err)
+})
 // 정적 SPA (Vue 3 + ViewLogic Router) — index.html, css/, src/views·logic·layouts
 app.use(express.static(PUBLIC_DIR, { index: false }))
 
