@@ -113,12 +113,18 @@ export async function handleLogin(c: Context): Promise<Response> {
   }
 
   // 회원: DB 조회 + 해시 검증 + 승인·활성 확인
-  if (!c.env.PW_HASH_SECRET) return c.html(loginPageHtml('서버 인증 설정 오류(PW_HASH_SECRET).', loginId), 503)
+  // ⚠ 시크릿은 반드시 가입(handleSignup)과 **같은 방식(requireSecret = trim)** 으로 읽는다.
+  //   실사고: wrangler secret 을 파이프로 넣어 값 끝에 개행이 붙자, 가입은 trim 된 값으로 해시하고
+  //   로그인은 원본(개행 포함)으로 해시해 같은 비밀번호가 조용히 401 이 났다. 읽는 방식이 갈리면 안 된다.
+  let pepper: string
+  try { pepper = requireSecret('PW_HASH_SECRET', c.env.PW_HASH_SECRET) } catch {
+    return c.html(loginPageHtml('서버 인증 설정 오류(PW_HASH_SECRET). 관리자에게 알려주세요.', loginId), 503)
+  }
   const m: any = await c.env.DB.prepare(
     `SELECT id, password_hash, status, active FROM managers WHERE login_id = ?`,
   ).bind(loginId).first()
   if (m && Number(m.active) === 1 && m.password_hash) {
-    const calc = await hmacHex(c.env.PW_HASH_SECRET, 'pw:' + pw)
+    const calc = await hmacHex(pepper, 'pw:' + pw)
     if (safeEq(calc, String(m.password_hash))) {
       if (m.status !== 'approved') return c.html(loginPageHtml('가입 승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다.', loginId), 403)
       await issueSession(c, { role: 'manager', memberId: Number(m.id), label: loginId })
