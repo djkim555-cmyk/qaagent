@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($c = Get-NetTCPConnection -LocalPort 5510 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $pid5510 = \\($c | Select-Object -First 1\\).OwningProcess; Stop-Process -Id $pid5510 -Force; \"killed $pid5510\" } else { \"nothing on 5510\" }; Start-Sleep -Seconds 16; $c2 = Get-NetTCPConnection -LocalPort 5510 -State Listen -ErrorAction SilentlyContinue; if \\($c2\\) { Get-Process -Id \\($c2 | Select-Object -First 1\\).OwningProcess | Select-Object Id, StartTime | Format-List; try { $r = Invoke-WebRequest -Uri \"http://localhost:5510/\" -UseBasicParsing -TimeoutSec 10; \"HTTP $\\($r.StatusCode\\)\" } catch { \"HTTP ERR: $\\($_.Exception.Message\\)\" } } else { \"not up yet\" })",
+      "Bash(npx tsc *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git push *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

@@ -17,6 +17,8 @@ node_modules/
 # 로그·임시 산출물
 *.log
 .playwright-mcp/
+# 화면에서 삭제한 시나리오의 보관함(소프트 삭제) — 저장소에 되살리지 않는다
+scenarios/_trash/
 
 # 배포/전달용 산출물(zip 등) — 저장소에 바이너리 커밋 금지
 output/
