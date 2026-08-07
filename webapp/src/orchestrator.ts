@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { PROJECT_ROOT, CONCURRENCY, MODEL, ENABLE_PLAYWRIGHT } from './config.js'
+import { PROJECT_ROOT, CONCURRENCY, MODEL, ENABLE_PLAYWRIGHT, PLAYWRIGHT_MCP_SPEC } from './config.js'
 import { loadAgentBody } from './agents.js'
 import { RunState, pushEvent } from './runStore.js'
 import * as repo from './repo.js'
@@ -28,10 +28,15 @@ async function runAgent(prompt: string, abortController?: AbortController, onTex
     model: MODEL,
     permissionMode: 'bypassPermissions', // 내부 도구 · 헤드리스. guards 는 프롬프트로 강제.
     allowedTools: ['Read', 'Write', 'Glob', 'Grep', 'Bash', 'mcp__playwright__*'],
+    // 전역 ~/.claude 주입 차단 — 포팅 재현성. 미지정이면 SDK가 CLI 기본값(user/project/local)을
+    // 써서 실행 PC의 ~/.claude/CLAUDE.md·settings.json 이 매 런마다 섞여 QA 결과가 PC마다 달라진다.
+    // 'project'만 남기는 이유: 프로젝트 CLAUDE.md(zip 동봉 = 결정론적)의 QA 규율은 유지해야 한다. 지우지 말 것.
+    settingSources: ['project'],
   }
   if (abortController) options.abortController = abortController // 중단 신호 전파(query 취소)
   if (ENABLE_PLAYWRIGHT) {
-    options.mcpServers = { playwright: { command: 'npx', args: ['@playwright/mcp@latest'] } }
+    // 핀 고정 스펙(config.PLAYWRIGHT_MCP_SPEC) + '-y' — 캐시 없는 새 PC에서 npx 설치 확인 프롬프트로 멈추지 않게.
+    options.mcpServers = { playwright: { command: 'npx', args: ['-y', PLAYWRIGHT_MCP_SPEC] } }
   }
 
   let finalText = ''

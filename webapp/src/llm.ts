@@ -1,12 +1,20 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import fs from 'node:fs'
 import path from 'node:path'
-import { PROJECT_ROOT, MODEL, ENABLE_PLAYWRIGHT } from './config.js'
+import { PROJECT_ROOT, MODEL, ENABLE_PLAYWRIGHT, PLAYWRIGHT_MCP_SPEC } from './config.js'
 import { redactSecrets, redactScreenSummary } from './redact.js'
 
 async function complete(prompt: string): Promise<string> {
   let finalText = ''
-  const options: any = { cwd: PROJECT_ROOT, model: MODEL, permissionMode: 'bypassPermissions', allowedTools: ['Read', 'Glob'] }
+  const options: any = {
+    cwd: PROJECT_ROOT,
+    model: MODEL,
+    permissionMode: 'bypassPermissions',
+    allowedTools: ['Read', 'Glob'],
+    // 전역 ~/.claude 주입 차단 — 포팅 재현성(실행 PC의 전역 CLAUDE.md·settings 가 생성 결과를 좌우하지 않게).
+    // 'project'는 zip 동봉 프로젝트 CLAUDE.md 만 허용(결정론적). 지우지 말 것.
+    settingSources: ['project'],
+  }
   for await (const msg of query({ prompt, options }) as any) {
     if (msg?.type === 'result') finalText = msg.result ?? finalText
   }
@@ -22,7 +30,10 @@ async function completeWithBrowser(prompt: string): Promise<string> {
     model: MODEL,
     permissionMode: 'bypassPermissions',
     allowedTools: ['Read', 'Glob', 'Grep', 'mcp__playwright__*'],
-    mcpServers: { playwright: { command: 'npx', args: ['@playwright/mcp@latest'] } },
+    // 핀 고정 스펙(config.PLAYWRIGHT_MCP_SPEC) + '-y' — 캐시 없는 새 PC에서 npx가 비대화형으로 멈추지 않게.
+    mcpServers: { playwright: { command: 'npx', args: ['-y', PLAYWRIGHT_MCP_SPEC] } },
+    // 전역 ~/.claude 주입 차단 — 포팅 재현성. 'project'만 허용(zip 동봉 = 결정론적). 지우지 말 것.
+    settingSources: ['project'],
   }
   let finalText = ''
   for await (const msg of query({ prompt, options }) as any) {

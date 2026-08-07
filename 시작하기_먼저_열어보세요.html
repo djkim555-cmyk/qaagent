@@ -52,9 +52,9 @@
   </header>
 
   <div class="lead">
-    이 프로그램은 <b>내 컴퓨터에서 도는 QA 도구</b>입니다. 딱 <b>3가지</b>만 준비하면 시작합니다 —
-    ① 프로그램 실행기(Node.js) 설치 ② 시작 버튼 더블클릭 ③ Claude 로그인.
-    <br />나머지(비밀번호·설치 등)는 <b>자동으로</b> 처리됩니다.
+    이 프로그램은 <b>내 컴퓨터에서 도는 QA 도구</b>입니다. 딱 <b>3가지</b>만 하면 시작합니다 —
+    ① 프로그램 실행기(Node.js) 설치 ② <b>설치.bat</b> 더블클릭 ③ 서버 시작.
+    <br />나머지(비밀번호·설치·브라우저 준비 등)는 <b>설치 프로그램이 자동으로</b> 처리합니다.
   </div>
 
   <div class="step">
@@ -62,29 +62,52 @@
     <p>이 프로그램을 돌리는 엔진입니다. 아래 버튼을 눌러 <b>LTS 버전</b>을 받아 설치하세요.
        설치 중 선택지는 모두 <b>기본값(다음)</b>으로 넘어가면 됩니다.</p>
     <a class="btn" href="https://nodejs.org/ko/download" target="_blank">Node.js 내려받기 →</a>
-    <p><small>이미 설치돼 있다면 이 단계는 건너뛰어도 됩니다. (버전 24 이상 권장)</small></p>
+    <p><small>이미 설치돼 있어도 <b>버전 24 이상</b>이어야 합니다. 낮으면 설치 프로그램이 알려주고 멈춥니다.</small></p>
   </div>
 
   <div class="step">
-    <h2><span class="num">2</span> 시작 버튼 더블클릭</h2>
-    <p><code>webapp</code> 폴더 안의 <b>QA서버-시작.bat</b> 파일을 <b>더블클릭</b>하세요.
-       검은 창이 뜨면서 자동으로 설치가 진행됩니다.</p>
+    <h2><span class="num">2</span> 설치.bat 더블클릭 (최초 1회, 5~10분)</h2>
+    <p>압축을 푼 폴더의 맨 위에 있는 <b>설치.bat</b> 파일을 <b>더블클릭</b>하세요.
+       검은 창이 뜨면서 필요한 것들을 순서대로 자동 설치·점검합니다.</p>
     <div class="note">
       처음 실행하면 두 가지를 물어봅니다:
       <ul>
         <li><b>관리자 비밀번호</b> — 나중에 로그인할 때 쓸 비밀번호를 정하세요. (그냥 엔터를 치면 자동으로 만들어 화면에 보여줍니다 → <b>꼭 적어두세요</b>)</li>
-        <li><b>API 키</b> — 있으면 붙여넣고, 없으면 그냥 <b>엔터</b>. (3단계에서 대신 로그인합니다)</li>
+        <li><b>API 키</b> — 있으면 붙여넣고, 없으면 그냥 <b>엔터</b>. (4단계에서 대신 로그인해도 됩니다)</li>
       </ul>
     </div>
-    <p><small>이후에는 같은 파일을 더블클릭할 때마다 바로 서버가 켜지고 브라우저가 열립니다.</small></p>
+    <p>마지막에 <b>점검 결과표</b>가 나옵니다. <code>FAIL</code> 이 없으면 준비 완료입니다.
+       <code>FAIL</code> 이 있으면 그 줄의 <b>“→” 안내</b>대로 처리하고 다시 더블클릭하세요(여러 번 실행해도 안전합니다).</p>
+    <div class="note warn">
+      <b>파일 이름이 <code>?��.bat</code> 처럼 깨져 보이면</b> 압축을 푼 도구가 한글을 잃은 것입니다.
+      그럴 때는 그 폴더에서 명령창을 열고 <code>node install/install.mjs</code> 를 입력하세요. (같은 동작)
+    </div>
   </div>
 
   <div class="step">
-    <h2><span class="num">3</span> Claude 인증 (새 QA를 '실행'하려면 필요)</h2>
-    <p>QA 에이전트가 실제로 테스트를 돌리려면 Claude 사용 권한이 필요합니다. <b>둘 중 하나</b>만 하세요:</p>
+    <h2><span class="num">3</span> 서버 시작 · 브라우저 접속</h2>
+    <p><code>webapp</code> 폴더의 <b>QA서버-시작.bat</b> 을 <b>더블클릭</b>하세요.
+       잠시 뒤 브라우저가 <code>http://localhost:5510</code> 으로 자동으로 열립니다. (안 열리면 직접 주소창에 입력)</p>
+    <p>로그인:</p>
     <ul>
-      <li><b>쉬운 방법</b> — 이 PC에 Claude Code가 있으면 명령창에 <code>claude login</code> 한 번. (구독 계정으로 로그인, 키 불필요)</li>
-      <li><b>또는</b> — <a href="https://platform.claude.com" target="_blank">platform.claude.com</a>에서 API 키(<code>sk-ant-...</code>)를 발급받아 2단계에서 붙여넣기.</li>
+      <li>아이디: <b>admin</b></li>
+      <li>비밀번호: <b>2단계에서 정한(또는 자동 생성된) 관리자 비밀번호</b></li>
+    </ul>
+    <p><small>이후에는 이 파일만 더블클릭하면 됩니다. 서버가 이미 켜져 있으면 브라우저만 열립니다.</small></p>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">4</span> Claude 인증 (새 QA를 '실행'하려면 필요)</h2>
+    <div class="note warn">
+      <b>설치가 끝났다고 QA 실행까지 되는 것은 아닙니다.</b> 실제로 테스트를 돌리려면 Claude 사용 권한이 따로 필요합니다.
+    </div>
+    <p><b>둘 중 하나</b>만 하세요:</p>
+    <ul>
+      <li><b>구독 로그인</b> — 명령창에 <code>claude login</code> 한 번. (키 불필요)
+        <br /><small>단, 이 명령은 <b>Claude Code가 설치돼 있어야</b> 씁니다. 없으면 먼저
+        <code>npm i -g @anthropic-ai/claude-code</code> 를 실행하세요.</small></li>
+      <li><b>또는</b> — <a href="https://platform.claude.com" target="_blank">platform.claude.com</a>에서 API 키를 발급받아
+        2단계에서 붙여넣기(또는 <code>webapp\.env</code> 의 <code>ANTHROPIC_API_KEY</code> 에 입력).</li>
     </ul>
     <div class="note ok">
       <b>결과를 '보기만' 할 거라면</b> 이 단계는 건너뛰어도 됩니다. 로그인·프로젝트 조회·상태/메모 편집은 인증 없이도 됩니다.
@@ -92,31 +115,38 @@
   </div>
 
   <div class="step">
-    <h2><span class="num">4</span> 브라우저에서 접속·로그인</h2>
-    <p>잠시 뒤 브라우저가 <code>http://localhost:5510</code> 으로 자동으로 열립니다. (안 열리면 직접 주소창에 입력)</p>
-    <p>로그인:</p>
+    <h2><span class="num">5</span> 끝! 그리고 알아둘 것</h2>
+    <div class="note ok">이제 프로젝트를 등록하고 “시나리오·실행” 탭에서 QA를 돌릴 수 있습니다.</div>
     <ul>
-      <li>아이디: <b>admin</b></li>
-      <li>비밀번호: <b>2단계에서 정한(또는 자동 생성된) 관리자 비밀번호</b></li>
+      <li><b>인터넷이 필요합니다.</b> 설치할 때(프로그램 내려받기)와 QA를 돌릴 때(Claude 접속) 모두.</li>
+      <li>화면 디자인이 인터넷의 글꼴·스타일을 쓰기 때문에, 회사 방화벽이 막으면 <b>모양만</b> 투박해질 수 있습니다(기능은 정상).</li>
+      <li>실제 브라우저로 테스트하려면 <b>Claude Code에서 이 폴더를 열고 MCP 서버 사용을 “승인”</b>해야 합니다. 승인하지 않으면 흉내내기(시뮬레이션) 모드로 돌아갑니다.</li>
     </ul>
-    <div class="note ok"><b>끝!</b> 이제 프로젝트를 등록하고 “시나리오·실행” 탭에서 QA를 돌릴 수 있습니다.</div>
   </div>
 
   <hr />
 
-  <h3>잘 안 될 때</h3>
+  <h3>잘 안 될 때 — 먼저 자기진단</h3>
+  <div class="note">
+    폴더에서 명령창을 열고 <code>node install/doctor.mjs</code> 를 입력하면
+    <b>무엇이 문제인지 표로 알려줍니다</b>(아무것도 바꾸지 않습니다).
+    고치려면 <code>node install/install.mjs</code> — 여러 번 실행해도 안전합니다.
+  </div>
   <div class="note warn">
     <ul>
       <li><b>검은 창이 “Node.js 없음”이라고 함</b> → 1단계 설치 후 다시 더블클릭.</li>
-      <li><b>서버가 바로 꺼짐 / <code>[auth]</code> 오류</b> → 드문 경우입니다. <code>webapp\.env</code> 파일을 지우고 2단계부터 다시 하세요(설정이 새로 만들어집니다).</li>
-      <li><b>“QA 실행 실패”</b> → 3단계 인증(로그인 또는 API 키)이 안 된 것입니다.</li>
+      <li><b>“Node 버전이 낮다”며 멈춤</b> → 24 이상이 필요합니다. 22·23은 안 됩니다(설치는 되는 척하고 서버만 죽습니다).</li>
+      <li><b>서버가 바로 꺼짐 / <code>[auth]</code> 오류</b> → 설정값이 비어 있는 경우입니다. <b>설치.bat</b>을 다시 더블클릭하면 자동으로 복구합니다.</li>
+      <li><b>“QA 실행 실패”</b> → 4단계 인증(로그인 또는 API 키)이 안 된 것입니다.</li>
+      <li><b>포트가 이미 쓰인다고 함</b> → 명령창에서 <code>node install/install.mjs --port=5511</code> (다른 번호로 바꿔줍니다).</li>
       <li><b>주소가 안 열림</b> → 검은 창이 켜져 있는 상태에서 <code>http://localhost:5510</code> 을 직접 입력.</li>
     </ul>
   </div>
 
   <h3>더 자세한 설명 (선택)</h3>
-  <p>수동 설치, 다른 운영체제(macOS·Linux), 상시 가동·서버 배포, 기존 데이터 옮기기 등은
-     같은 폴더의 <b>SETUP-NEW-PC.md</b> 와 <b>webapp/DEPLOY.md</b> 에 있습니다.</p>
+  <p>수동 설치, 다른 운영체제(macOS·Linux — <code>sh install.sh</code>), 상시 가동·서버 배포,
+     <b>기존 PC의 QA 결과 옮기기</b> 등은 같은 폴더의 <b>SETUP-NEW-PC.md</b> 와 <b>webapp/DEPLOY.md</b> 에 있습니다.
+     이 패키지에 무엇이 들어 있고 무엇이 빠졌는지는 <b>MANIFEST.txt</b> 를 보세요.</p>
 
   <div class="foot">QA 에이전트팀 · 내부 배포용 안내서 — 이 파일은 인터넷 없이도 열립니다.</div>
 </div>

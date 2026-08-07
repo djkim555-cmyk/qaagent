@@ -56,12 +56,18 @@ const defaults = {
   ANTHROPIC_API_KEY: '', QA_ADMIN_ID: 'admin', PORT: '5510',
   QA_CONCURRENCY: '3', QA_MODEL: 'sonnet', QA_ENABLE_PLAYWRIGHT: 'true',
   QA_TEST_EMAIL: '', QA_TEST_PASSWORD: '',
+  // 아래는 코드가 읽는 선택 항목 — 빈 값이 곧 "기능 끔"이다(빈 값을 채워야 켜진다).
+  //   QA_ALLOW_INTERNAL_EXPLORE: 빈 값 → 내부망 대상 탐색 차단(SSRF 가드)
+  //   CLOUD_SYNC_URL/SYNC_TOKEN : 둘 다 있어야 클라우드 동기화 동작, 비면 no-op
+  //   SYNC_INTERVAL_MS          : 빈 값/0 → 주기 폴링 없음
+  QA_ALLOW_INTERNAL_EXPLORE: '', CLOUD_SYNC_URL: '', SYNC_TOKEN: '', SYNC_INTERVAL_MS: '',
 }
 for (const [k, v] of Object.entries(defaults)) if (cur[k] === undefined) cur[k] = v
 
 const order = ['ANTHROPIC_API_KEY', 'QA_PASSWORD', 'QA_SESSION_SECRET', 'QA_PW_PEPPER',
   'QA_ADMIN_ID', 'PORT', 'QA_CONCURRENCY', 'QA_MODEL', 'QA_ENABLE_PLAYWRIGHT',
-  'QA_TEST_EMAIL', 'QA_TEST_PASSWORD']
+  'QA_TEST_EMAIL', 'QA_TEST_PASSWORD',
+  'QA_ALLOW_INTERNAL_EXPLORE', 'CLOUD_SYNC_URL', 'SYNC_TOKEN', 'SYNC_INTERVAL_MS']
 const out = ['# setup-env.mjs 가 생성/보정한 파일입니다. 시크릿 포함 — 공유·커밋 금지.']
 for (const k of order) out.push(`${k}=${cur[k] ?? ''}`)
 // order 밖 키도 보존

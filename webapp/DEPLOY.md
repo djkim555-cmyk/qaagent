@@ -12,7 +12,7 @@ QA 에이전트팀 webapp 을 **사내 서버에서 상시 운영**하기 위한
 
 | 항목 | 요구 | 비고 |
 |---|---|---|
-| **Node.js** | **24 LTS 권장** (최소 22.5) | DB가 `node:sqlite` 사용 → 18·20 불가. 22대는 `--experimental-sqlite` 플래그 필요 |
+| **Node.js** | **24 이상 필수(하드 요구)** | DB가 `node:sqlite` 사용. **22·23 은 지원하지 않습니다** — 22.0~22.4 는 모듈 자체가 없고 22.5+ 도 플래그가 필요해, "설치 게이트는 통과하고 서버만 조용히 죽는" 실패가 납니다. 설치 프로그램(`install/install.mjs`)이 major < 24 를 하드 차단합니다 |
 | 메모리 | 2GB+ (페르소나 동시 실행 시 Chromium 다중 구동) | `QA_CONCURRENCY` 로 조절 |
 | 디스크 | 리포트/스크린샷 누적 — `reports/runs/` 증가 고려 | 정기 정리/백업 |
 | 아웃바운드 | `api.anthropic.com` (Agent SDK), 첫 실행 시 npm/Playwright 다운로드 | 인터넷 가능 환경이므로 OK |
@@ -29,11 +29,22 @@ node -v    # v24.x 이상 권장
 저장소 루트(`QA 에이전트팀/`) 전체를 서버에 둡니다. webapp 은 상위의
 `personas/`, `scenarios/`, `reports/`, `.claude/` 를 읽으므로 **루트째로** 옮겨야 합니다.
 
+**권장: 설치 프로그램에 위임** — 아래 수동 절차를 직접 밟는 대신, 저장소 루트에서 한 줄로 처리할 수 있습니다.
+같은 판정 로직(Node 게이트·의존성·브라우저·MCP·`.env`·DB·포트)을 한 곳에서 수행합니다.
+```bash
+node install/install.mjs --yes          # 서버용(비대화형). 진단만: node install/doctor.mjs
+```
+
+수동으로 하려면:
 ```bash
 cd "QA 에이전트팀/webapp"
-npm ci            # package-lock 기준 정확 설치 (없으면 npm install)
-npx playwright install chromium   # 브라우저 바이너리 사전 설치 (권장)
+npm ci            # package-lock 기준 정확 설치. 불일치로 실패하면 npm install 로 우회하지 말고 lock 을 맞출 것(재현성)
+# 브라우저 바이너리(권장). 버전은 package.json 의 qaAgentTeam.playwrightForBrowsers 를 따른다:
+npx -y playwright@<qaAgentTeam.playwrightForBrowsers> install chromium
 ```
+> **버전 핀의 단일 출처(SoT)** = `webapp/package.json` 의 `qaAgentTeam` 필드
+> (`nodeMajorMin` · `playwrightMcpSpec` · `playwrightForBrowsers`).
+> `.mcp.json` 은 `install/install.mjs` 가 이 필드를 읽어 생성/갱신합니다 — **손으로 두 곳을 맞추지 마세요.**
 
 ---
 
@@ -45,8 +56,9 @@ npx playwright install chromium   # 브라우저 바이너리 사전 설치 (권
 # 인증은 둘 중 하나. (A) 이 서버에서 `claude login` 했다면 비워둬도 됨(로그인 세션 사용).
 #                    (B) 세션이 없으면 키 입력 — 무인 전용 서버는 보통 이 방식.
 ANTHROPIC_API_KEY=sk-ant-...        # 로그인 세션이 없을 때만 필수
-QA_PASSWORD=<강한-비밀번호로-변경>    # [필수] 미설정 시 기본값 malgnqa 로 폴백됨 → 공개 노출 전 반드시 변경
-QA_SESSION_SECRET=<랜덤-32자-이상>    # [필수] 미설정 시 공개 기본 시크릿으로 폴백 → 쿠키 위조 위험, 반드시 교체
+QA_PASSWORD=<강한-비밀번호로-변경>    # [필수] 미설정/공개기본값이면 폴백이 아니라 **서버가 기동하지 않는다**(fail-closed)
+QA_SESSION_SECRET=<랜덤-32자-이상>    # [필수] 미설정/공개기본값이면 서버 미기동
+QA_PW_PEPPER=<랜덤-32자-이상>         # [필수] 비밀번호 해시용. 한번 정하면 변경 금지(변경 시 전 회원 비번 재설정 필요)
 PORT=5510
 QA_CONCURRENCY=3                    # 서버 사양에 맞게 (브라우저 동시 수)
 QA_MODEL=sonnet
@@ -56,7 +68,13 @@ QA_ENABLE_PLAYWRIGHT=true
 # QA_TEST_PASSWORD=...
 ```
 
-`QA_SESSION_SECRET` 랜덤 생성:
+> ⚠️ **정정(중요)**: 이 문서의 옛 판본은 "미설정 시 기본값 `malgnqa` 로 폴백"이라고 적었으나 **사실이 아닙니다.**
+> 현재 코드(`src/auth.ts`)는 **fail-closed** 입니다 — `QA_PASSWORD`·`QA_SESSION_SECRET`·`QA_PW_PEPPER` 중
+> 하나라도 비었거나 공개기본값(`malgnqa`·`change-me`·`qa-agent-team-internal-secret-v1`)이면
+> **import 시점에 throw 하며 서버가 뜨지 않습니다**(창이 즉시 닫힘). `malgnqa` 로 로그인을 시도해선 안 됩니다.
+> 값 3종을 자동으로 안전하게 채우려면 `node scripts/setup-env.mjs`(멱등) 또는 루트 `설치.bat` 을 쓰세요.
+
+`QA_SESSION_SECRET`·`QA_PW_PEPPER` 랜덤 생성:
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
@@ -216,12 +234,12 @@ WAL 모드라 운영 중 복사 시 세 파일을 함께 받으세요. 안전한
 
 ## 7. 운영 전 체크리스트
 
-- [ ] Node 24(또는 22.5+ with 플래그) 설치 확인
-- [ ] `QA_PASSWORD` 기본값(`malgnqa`)에서 변경
-- [ ] `QA_SESSION_SECRET` 랜덤값으로 변경
+- [ ] **Node 24 이상** 설치 확인 (22·23 불가 — 하드 요구). `node install/doctor.mjs` 로 한 번에 점검
+- [ ] `QA_PASSWORD` 를 고유한 강한 값으로 설정 (미설정·`malgnqa` 면 폴백이 아니라 **서버 미기동**)
+- [ ] `QA_SESSION_SECRET`·`QA_PW_PEPPER` 랜덤값으로 설정
 - [ ] 인증 확보: 이 서버에서 `claude login` 했거나(세션) `ANTHROPIC_API_KEY` 설정 + 아웃바운드(api.anthropic.com) 허용
       ※ 서비스를 특정 계정으로 돌리면 그 계정이 로그인돼 있어야 세션 방식이 동작(systemd User=/Windows 서비스 계정 주의)
-- [ ] `npx playwright install chromium` 완료 (또는 시뮬레이션 모드 결정)
+- [ ] Chromium 설치 완료 (또는 시뮬레이션 모드 결정) — 버전은 `package.json` 의 `qaAgentTeam.playwrightForBrowsers`
 - [ ] 프로세스 관리자 등록 + 재부팅 자동시작 확인
 - [ ] 리버스 프록시 HTTPS + SSE 버퍼링 OFF + 타임아웃 연장
 - [ ] `data/` · `reports/runs/` 백업 스케줄 등록

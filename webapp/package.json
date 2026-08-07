@@ -8,8 +8,14 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts"
   },
+  "qaAgentTeam": {
+    "_comment": "포팅 재현성 단일 출처(SoT). install.mjs·doctor.mjs 가 .mcp.json 생성에 이 값을 읽고, src/config.ts 가 런타임 상수로 읽는다. 값을 다른 파일에 복사하지 말 것.",
+    "nodeMajorMin": 24,
+    "playwrightMcpSpec": "@playwright/mcp@0.0.78",
+    "playwrightForBrowsers": "1.62.0-alpha-1783623505000"
+  },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "latest",
+    "@anthropic-ai/claude-agent-sdk": "0.3.159",
     "express": "^4.19.2"
   },
   "devDependencies": {

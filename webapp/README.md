@@ -14,7 +14,7 @@
 
 ## 화면 구성 (SPA · 공통 GNB)
 
-- **로그인**: 비밀번호 전용 (기본 `malgnqa`, 환경변수 `QA_PASSWORD`). 쿠키 세션 + ViewLogic `checkAuthFunction` 게이트.
+- **로그인**: 아이디(`admin`) + 비밀번호(`QA_PASSWORD`). **기본값·폴백은 없습니다** — 미설정이면 서버가 기동하지 않습니다(fail-closed). 쿠키 세션 + ViewLogic `checkAuthFunction` 게이트.
 - **GNB(공통 레이아웃)**: `public/src/views/layout/default.html` — 대시보드 · 페르소나 시드 · 프로젝트 · 설정.
 - **대시보드** `#/home`: 진행 중 실행·미해결 P1·이번 주 실행·프로젝트 수 + 최근 실행.
 - **프로젝트** `/projects`: 등록·목록. 진입 후 탭:
@@ -44,7 +44,7 @@ Agent SDK 프롬프트로 주입하고, 리포트는 기존 `reports/` 관례대
 
 ## 사전 준비
 
-1. **Node 24 LTS 권장** (최소 22.5+). DB가 Node 내장 `node:sqlite` 를 쓰므로 18·20 에서는 실행되지 않는다. Node 22 대에서는 `--experimental-sqlite` 플래그가 필요하고, 24부터는 플래그 없이 동작한다.
+1. **Node 24 이상 필수(하드 요구)**. DB가 Node 내장 `node:sqlite` 를 쓴다. **22·23 은 지원하지 않는다** — 22.0~22.4 는 모듈 자체가 없고 22.5+ 도 `--experimental-sqlite` 플래그가 필요해, 게이트만 통과하고 서버가 조용히 죽는다. 설치 프로그램(`node install/install.mjs`)이 major < 24 를 하드 차단한다. 요구 버전의 단일 출처(SoT)는 `package.json` 의 `qaAgentTeam.nodeMajorMin`.
 2. **Agent SDK 인증** — 둘 중 하나면 됩니다:
    - **(권장) Claude 로그인 세션**: 이 머신에서 `claude login` 으로 로그인돼 있으면 API 키 없이
      그 세션(구독 인증)으로 동작합니다. `~/.claude/.credentials.json` 을 SDK 가 자동 사용.
@@ -56,13 +56,20 @@ Agent SDK 프롬프트로 주입하고, 리포트는 기존 `reports/` 관례대
 ## 실행
 
 ```powershell
-cd "C:\workspace\QA 에이전트팀\webapp"
-copy .env.example .env       # 로그인 세션이 있으면 키 입력 불필요. 없으면 ANTHROPIC_API_KEY 입력
-npm install
+# 권장: 저장소 루트에서 설치 프로그램에 위임(Node 게이트·의존성·브라우저·MCP·.env·DB·포트를 한 번에)
+node install\install.mjs
+
+# 또는 수동
+cd "<저장소 루트>\webapp"
+node scripts\setup-env.mjs --admin="정할비밀번호"   # ★ .env.example 복사만으로는 부족하다(필수 3종이 빈 값 → 서버 미기동)
+npm ci
 npm run dev                  # http://localhost:5510
 ```
 
-브라우저에서 `http://localhost:5510` → 비밀번호(`malgnqa`) 로그인 → 프로젝트 등록 →
+> ⚠️ `copy .env.example .env` 만 하면 `QA_PASSWORD`·`QA_SESSION_SECRET`·`QA_PW_PEPPER` 가 **빈 값**이라
+> 서버가 뜨지 않는다(fail-closed). 반드시 `setup-env.mjs`(멱등) 로 값을 채운다.
+
+브라우저에서 `http://localhost:5510` → 아이디 `admin` + 설정한 `QA_PASSWORD` 로 로그인 → 프로젝트 등록 →
 실행 탭에서 QA 실행. 진행상황이 실시간으로 흐르고 끝나면 통합 리포트가 표시되며,
 발견 이슈는 **QA 리스트** 탭에서 구분·담당자·상태를 배정할 수 있습니다.
 원본 리포트/스크린샷은 `reports/runs/{runId}/` 에 그대로 쌓입니다.
@@ -72,8 +79,9 @@ npm run dev                  # http://localhost:5510
 | 키 | 기본 | 설명 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Agent SDK 인증. **`claude login` 세션이 있으면 비워둬도 됨**(세션 사용). 세션 없는 머신에서만 필수 |
-| `QA_PASSWORD` | **(필수)** | 슈퍼관리자 로그인 비밀번호. 미설정/공개기본값(`malgnqa`)이면 서버 미기동 |
-| `QA_SESSION_SECRET` | **(필수)** | 세션 쿠키 서명 시크릿(랜덤 32자↑). 미설정/공개기본값이면 서버 미기동 |
+| `QA_PASSWORD` | **(필수·기본값 없음)** | 슈퍼관리자 로그인 비밀번호. 미설정/공개기본값(`malgnqa`)이면 **폴백이 아니라 서버 미기동** |
+| `QA_SESSION_SECRET` | **(필수·기본값 없음)** | 세션 쿠키 서명 시크릿(랜덤 32자↑). 미설정/공개기본값이면 서버 미기동 |
+| `QA_PW_PEPPER` | **(필수·기본값 없음)** | 비밀번호 해시 전용 페퍼. 한번 정하면 변경 금지(변경 시 전 회원 비번 재설정) |
 | `PORT` | 5510 | 서버 포트 |
 | `QA_CONCURRENCY` | 3 | 페르소나 동시 실행 수 |
 | `QA_MODEL` | sonnet | 페르소나/통합/생성 모델 |

@@ -22,6 +22,21 @@ scenarios/_trash/
 
 # 배포/전달용 산출물(zip 등) — 저장소에 바이너리 커밋 금지
 output/
+# 설치 프로그램이 생성하는 진단 리포트(환경 종속)
+install/last-install-report.txt
+
+# 업로드 테스트용 더미 파일 — 약 17MB, 내용 무의미.
+# 전달 zip 에서 제외하고 install/make-fixtures.mjs 가 설치 시 같은 크기로 재생성한다.
+fixtures/
+
+# 루트에 임시로 만든 일회성 QA 실행 스크립트.
+# 대상 서비스 평문 비밀번호가 하드코딩된 사례가 있어 실수 커밋을 막는다(자격증명은 .env 의 QA_TEST_* 로만).
+qa-p*.cjs
+qa-p*.js
+qa-p*.mjs
+qa_p*.cjs
+qa_p*.js
+qa_p*.mjs
 
 # OS
 .DS_Store
